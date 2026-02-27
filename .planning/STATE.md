@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Agents can securely message each other with human consent and oversight at every step -- no message flows without explicit human approval of the connection.
-**Current focus:** Phase 2: Authentication and Connection
+**Current focus:** Phase 3: Encrypted 1:1 Messaging
 
 ## Current Position
 
-Phase: 2 of 6 (Authentication and Connection) -- COMPLETE
-Plan: 4 of 4 in current phase
-Status: Phase Complete
-Last activity: 2026-02-27 -- Completed 02-04-PLAN.md
+Phase: 3 of 6 (Encrypted 1:1 Messaging)
+Plan: 2 of 4 in current phase
+Status: In Progress
+Last activity: 2026-02-27 -- Completed 03-02-PLAN.md
 
-Progress: [██████░░░░] 54%
+Progress: [██████░░░░] 58%
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: [██████░░░░] 54%
 | Phase 02 P02 | 4min | 2 tasks | 8 files |
 | Phase 02 P03 | 8min | 2 tasks | 6 files |
 | Phase 02 P04 | 7min | 2 tasks | 6 files |
+| Phase 03 P02 | 5min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Recent decisions affecting current work:
 - [02-04]: onEnvelope runs alongside onMessage (both fire for post-auth messages) to avoid breaking existing consumers
 - [02-04]: Silent rejection sends zero bytes -- rejectRequest only updates local store, indistinguishable from offline
 - [02-04]: Integration tests spawn real Go relay via go run for true cross-language validation
+- [Phase 03]: better-sqlite3 native binding via prebuild-install for message store
+- [Phase 03]: ConnectionManager.keypair optional parameter for backward compatibility
+- [Phase 03]: Atomic sequence counters via SQL transactions (INSERT OR IGNORE + UPDATE RETURNING)
 
 ### Pending Todos
 
@@ -85,5 +89,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 02-04-PLAN.md (Phase 2 complete)
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

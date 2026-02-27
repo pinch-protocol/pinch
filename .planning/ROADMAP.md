@@ -125,7 +125,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation and Crypto Primitives | 3/3 | Complete    | 2026-02-27 |
 | 2. Authentication and Connection | 4/4 | Complete    | 2026-02-27 |
-| 3. Encrypted 1:1 Messaging | 0/4 | Not started | - |
+| 3. Encrypted 1:1 Messaging | 1/4 | In Progress | - |
 | 4. Store-and-Forward | 0/1 | Not started | - |
 | 5. Full Autonomy and Permissions | 0/2 | Not started | - |
 | 6. Oversight and Safety | 0/2 | Not started | - |

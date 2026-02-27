@@ -33,11 +33,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Encryption
 
-- [ ] **CRYP-01**: Agent encrypts 1:1 messages using NaCl box (X25519 key exchange + XSalsa20-Poly1305)
+- [x] **CRYP-01**: Agent encrypts 1:1 messages using NaCl box (X25519 key exchange + XSalsa20-Poly1305)
 - [x] **CRYP-02**: Agent converts Ed25519 signing keys to X25519 encryption keys using libsodium/edwards25519
 - [x] **CRYP-03**: Every encrypted message uses a unique 24-byte random nonce from CSPRNG, prepended to ciphertext
 - [x] **CRYP-04**: Cross-language crypto roundtrip tests pass in CI (Go encrypts/TS decrypts and vice versa)
-- [ ] **CRYP-05**: Sender receives E2E signed delivery confirmation when message is delivered to recipient
+- [x] **CRYP-05**: Sender receives E2E signed delivery confirmation when message is delivered to recipient
 
 ### Connection
 
@@ -135,11 +135,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RELY-06 | Phase 4 | Pending |
 | RELY-07 | Phase 6 | Pending |
 | RELY-08 | Phase 1 | Complete |
-| CRYP-01 | Phase 3 | Pending |
+| CRYP-01 | Phase 3 | Complete |
 | CRYP-02 | Phase 1 | Complete |
 | CRYP-03 | Phase 1 | Complete |
 | CRYP-04 | Phase 1 | Complete |
-| CRYP-05 | Phase 3 | Pending |
+| CRYP-05 | Phase 3 | Complete |
 | CONN-01 | Phase 2 | Complete |
 | CONN-02 | Phase 2 | Complete |
 | CONN-03 | Phase 2 | Complete |
