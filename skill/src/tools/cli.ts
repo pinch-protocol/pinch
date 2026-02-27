@@ -147,3 +147,78 @@ export async function shutdown(): Promise<void> {
 	bootstrapped.messageStore.close();
 	bootstrapped = null;
 }
+
+// ---------------------------------------------------------------------------
+// Local-only bootstrap (no relay connection)
+// ---------------------------------------------------------------------------
+
+/** Components returned by bootstrapLocal() -- local stores only, no relay. */
+export interface LocalBootstrapResult {
+	keypair: Keypair;
+	connectionStore: ConnectionStore;
+	messageStore: MessageStore;
+	activityFeed: ActivityFeed;
+}
+
+let localBootstrapped: LocalBootstrapResult | null = null;
+
+/**
+ * Initialize only local data stores (keypair, ConnectionStore, MessageStore,
+ * ActivityFeed) without connecting to a relay server.
+ *
+ * Use this for CLI tools that only need to read/write local data and do not
+ * require a WebSocket connection to the relay (e.g. pinch-permissions,
+ * pinch-audit-verify, pinch-audit-export).
+ *
+ * Environment variables:
+ * - PINCH_KEYPAIR_PATH: Path to keypair JSON file (default: ~/.pinch/keypair.json)
+ * - PINCH_DATA_DIR: Directory for SQLite and connection store (default: ~/.pinch/data)
+ *
+ * Does NOT read or require PINCH_RELAY_URL.
+ */
+export async function bootstrapLocal(): Promise<LocalBootstrapResult> {
+	if (localBootstrapped) return localBootstrapped;
+
+	const keypairPath =
+		process.env.PINCH_KEYPAIR_PATH ??
+		join(homedir(), ".pinch", "keypair.json");
+	const dataDir =
+		process.env.PINCH_DATA_DIR ?? join(homedir(), ".pinch", "data");
+
+	// Load or generate keypair.
+	let keypair: Keypair;
+	try {
+		keypair = await loadKeypair(keypairPath);
+	} catch {
+		keypair = await generateKeypair();
+		await saveKeypair(keypair, keypairPath);
+	}
+
+	// Create local stores only -- no relay, no managers, no enforcement.
+	const connectionStore = new ConnectionStore(
+		join(dataDir, "connections.json"),
+	);
+	await connectionStore.load();
+	await connectionStore.clearPassthroughFlags();
+
+	const messageStore = new MessageStore(join(dataDir, "messages.db"));
+	const activityFeed = new ActivityFeed(messageStore.getDb());
+
+	localBootstrapped = {
+		keypair,
+		connectionStore,
+		messageStore,
+		activityFeed,
+	};
+
+	return localBootstrapped;
+}
+
+/**
+ * Close local stores. Call after local-only tool completes.
+ */
+export async function shutdownLocal(): Promise<void> {
+	if (!localBootstrapped) return;
+	localBootstrapped.messageStore.close();
+	localBootstrapped = null;
+}
