@@ -25,7 +25,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **RELY-01**: Go relay server accepts WebSocket connections and routes encrypted blobs without inspecting content
 - [x] **RELY-02**: Relay authenticates agents via Ed25519 challenge-response (relay sends nonce, agent signs, relay verifies)
 - [x] **RELY-03**: Relay maintains a hub routing table mapping `pinch:` addresses to active WebSocket connections
-- [ ] **RELY-04**: Relay delivers messages in real-time when both agents are online (sub-100ms relay hop)
+- [x] **RELY-04**: Relay delivers messages in real-time when both agents are online (sub-100ms relay hop)
 - [ ] **RELY-05**: Relay queues encrypted messages in bbolt for offline agents with configurable TTL (7-day default)
 - [ ] **RELY-06**: Relay flushes queued messages to agent on reconnection in order
 - [ ] **RELY-07**: Relay enforces per-connection rate limiting (token bucket or sliding window)
@@ -130,7 +130,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RELY-01 | Phase 1 | Complete |
 | RELY-02 | Phase 2 | Complete |
 | RELY-03 | Phase 1 | Complete |
-| RELY-04 | Phase 3 | Pending |
+| RELY-04 | Phase 3 | Complete |
 | RELY-05 | Phase 4 | Pending |
 | RELY-06 | Phase 4 | Pending |
 | RELY-07 | Phase 6 | Pending |
