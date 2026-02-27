@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Store-and-Forward** - bbolt message queue at relay, TTL expiration, reconnect flush, delivery confirmations
 - [x] **Phase 5: Full Autonomy and Permissions** - 4-tier autonomy state machine, inbound permissions manifest, autonomy change controls (completed 2026-02-27)
 - [x] **Phase 6: Oversight and Safety** - Activity feed, human intervention, audit log with hash chaining, rate limiting, circuit breakers, muting (completed 2026-02-27)
-- [ ] **Phase 7: Wire Phase 6 CLI Tools and Persist Attribution** - Add missing bin entries to package.json, persist inbound attribution to SQLite schema
+- [x] **Phase 7: Wire Phase 6 CLI Tools and Persist Attribution** - Add missing bin entries to package.json, persist inbound attribution to SQLite schema (completed 2026-02-27)
 
 ## Phase Details
 
@@ -149,4 +149,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Store-and-Forward | 2/2 | Complete    | 2026-02-27 |
 | 5. Full Autonomy and Permissions | 0/3 | Complete    | 2026-02-27 |
 | 6. Oversight and Safety | 0/4 | Complete    | 2026-02-27 |
-| 7. Wire Phase 6 CLI Tools and Persist Attribution | 0/1 | Planned | — |
+| 7. Wire Phase 6 CLI Tools and Persist Attribution | 0/1 | Complete    | 2026-02-27 |
