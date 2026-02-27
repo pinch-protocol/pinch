@@ -26,7 +26,7 @@ import type { RelayClient } from "./relay-client.js";
 import type { ConnectionStore } from "./connection-store.js";
 import type { MessageStore, MessageRecord } from "./message-store.js";
 import type { Keypair } from "./identity.js";
-import type { InboundRouter } from "./inbound-router.js";
+import type { EnforcementPipeline } from "./autonomy/enforcement-pipeline.js";
 
 /** Maximum serialized envelope size (conservative limit below relay's 64KB). */
 const MAX_ENVELOPE_SIZE = 60 * 1024;
@@ -50,7 +50,7 @@ export class MessageManager {
 		private connectionStore: ConnectionStore,
 		private messageStore: MessageStore,
 		private keypair: Keypair,
-		private inboundRouter: InboundRouter,
+		private enforcementPipeline: EnforcementPipeline,
 	) {}
 
 	/**
@@ -226,9 +226,8 @@ export class MessageManager {
 		};
 		this.messageStore.saveMessage(messageRecord);
 
-		// 11. Route via InboundRouter
-		const connection = this.connectionStore.getConnection(senderAddress);
-		this.inboundRouter.route(messageRecord, senderAddress);
+		// 11. Route via EnforcementPipeline
+		await this.enforcementPipeline.process(messageRecord, senderAddress);
 
 		// 12. Send delivery confirmation
 		await this.sendDeliveryConfirmation(messageId, senderAddress);

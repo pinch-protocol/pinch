@@ -33,6 +33,10 @@ export { PermissionsEnforcer } from "./autonomy/permissions-enforcer.js";
 export type { EnforcementResult } from "./autonomy/permissions-enforcer.js";
 export { NoOpPolicyEvaluator } from "./autonomy/policy-evaluator.js";
 export type { PolicyEvaluator, PolicyDecision } from "./autonomy/policy-evaluator.js";
+export { CircuitBreaker } from "./autonomy/circuit-breaker.js";
+export type { CircuitBreakerConfig, TriggerType } from "./autonomy/circuit-breaker.js";
+export { DEFAULT_CIRCUIT_BREAKER_CONFIG } from "./autonomy/circuit-breaker.js";
+export { EnforcementPipeline } from "./autonomy/enforcement-pipeline.js";
 
 // Delivery
 export { signDeliveryConfirmation, verifyDeliveryConfirmation } from "./delivery.js";

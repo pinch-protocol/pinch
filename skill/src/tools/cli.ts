@@ -20,6 +20,10 @@ import { ConnectionManager } from "../connection.js";
 import { MessageManager } from "../message-manager.js";
 import { InboundRouter } from "../inbound-router.js";
 import { ActivityFeed } from "../autonomy/activity-feed.js";
+import { PermissionsEnforcer } from "../autonomy/permissions-enforcer.js";
+import { NoOpPolicyEvaluator } from "../autonomy/policy-evaluator.js";
+import { CircuitBreaker } from "../autonomy/circuit-breaker.js";
+import { EnforcementPipeline } from "../autonomy/enforcement-pipeline.js";
 import type { Keypair } from "../identity.js";
 
 /** All initialized runtime components returned by bootstrap(). */
@@ -31,6 +35,10 @@ export interface BootstrapResult {
 	connectionManager: ConnectionManager;
 	messageManager: MessageManager;
 	inboundRouter: InboundRouter;
+	activityFeed: ActivityFeed;
+	permissionsEnforcer: PermissionsEnforcer;
+	circuitBreaker: CircuitBreaker;
+	enforcementPipeline: EnforcementPipeline;
 }
 
 let bootstrapped: BootstrapResult | null = null;
@@ -75,7 +83,19 @@ export async function bootstrap(): Promise<BootstrapResult> {
 	await connectionStore.load();
 	const messageStore = new MessageStore(join(dataDir, "messages.db"));
 	const activityFeed = new ActivityFeed(messageStore.getDb());
+	const policyEvaluator = new NoOpPolicyEvaluator();
+	const permissionsEnforcer = new PermissionsEnforcer(connectionStore, policyEvaluator);
+	const circuitBreaker = new CircuitBreaker(connectionStore, activityFeed);
 	const inboundRouter = new InboundRouter(connectionStore, messageStore, activityFeed);
+	const enforcementPipeline = new EnforcementPipeline(
+		permissionsEnforcer,
+		circuitBreaker,
+		inboundRouter,
+		policyEvaluator,
+		connectionStore,
+		messageStore,
+		activityFeed,
+	);
 	const connectionManager = new ConnectionManager(
 		relayClient,
 		connectionStore,
@@ -86,7 +106,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		connectionStore,
 		messageStore,
 		keypair,
-		inboundRouter,
+		enforcementPipeline,
 	);
 
 	// Connect to relay and set up handlers.
@@ -103,6 +123,10 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		connectionManager,
 		messageManager,
 		inboundRouter,
+		activityFeed,
+		permissionsEnforcer,
+		circuitBreaker,
+		enforcementPipeline,
 	};
 
 	return bootstrapped;
