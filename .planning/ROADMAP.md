@@ -31,12 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A protobuf-encoded message created in Go deserializes correctly in TypeScript and vice versa, including version field, sequence number, and timestamp fields
   4. Go encrypts a payload with NaCl box using an Ed25519-derived X25519 key and random nonce; TypeScript decrypts it successfully (and vice versa) -- this roundtrip test passes in CI
   5. Relay maintains a routing table mapping `pinch:` addresses to active WebSocket connections
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md — Monorepo scaffold, protobuf schema, and cross-language code generation
+- [ ] 01-02-PLAN.md — Ed25519 identity, NaCl box crypto, and cross-language roundtrip tests (TDD)
+- [ ] 01-03-PLAN.md — WebSocket relay hub with heartbeat and TypeScript client
 
 ### Phase 2: Authentication and Connection
 **Goal**: Agents authenticate to the relay via Ed25519 challenge-response and can establish mutual-consent connections with each other, with blocking enforced at the relay level
