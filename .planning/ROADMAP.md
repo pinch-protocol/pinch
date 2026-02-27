@@ -146,6 +146,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `TrackFlushKey` and `PopFlushKey` methods are removed from `relay/internal/hub/client.go` and `relay/internal/hub/hub.go`; all references eliminated; relay compiles and passes tests
   2. `InsecureSkipVerify: true` is removed or gated behind an explicit development flag in `relay/cmd/pinchd/main.go`; production default is secure
+**Plans**: 1 plan
+
+Plans:
+- [ ] 08-01-PLAN.md -- Remove dead flush key code and gate InsecureSkipVerify behind PINCH_RELAY_DEV env var
 
 ### Phase 9: Skill Documentation and CLI Optimization
 **Goal:** Fix documentation inaccuracies and eliminate unnecessary relay connections in local-only CLI tools
