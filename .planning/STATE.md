@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 6 of 6 (Oversight and Safety)
-Plan: 2 of 4 in current phase (complete)
+Plan: 4 of 4 in current phase (complete)
 Status: Executing
-Last activity: 2026-02-27 -- Completed 06-02-PLAN.md
+Last activity: 2026-02-27 -- Completed 06-04-PLAN.md
 
-Progress: [█████████████████████░░░] 90%
+Progress: [████████████████████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
+- Total plans completed: 19
 - Average duration: 6min
-- Total execution time: 1.9 hours
+- Total execution time: 2.0 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [█████████████████████░░
 | 03 | 4 | 23min | 6min |
 | 04 | 2 | 15min | 8min |
 | 05 | 3 | 15min | 5min |
-| 06 | 2 | 8min | 4min |
+| 06 | 3 | 11min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 05-02 (4min), 05-03 (5min), 06-01 (4min), 06-02 (4min)
+- Last 5 plans: 05-03 (5min), 06-01 (4min), 06-02 (4min), 06-04 (3min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -54,6 +54,7 @@ Progress: [█████████████████████░░
 | Phase 05 P03 | 5min | 2 tasks | 11 files |
 | Phase 06 P01 | 4min | 2 tasks | 5 files |
 | Phase 06 P02 | 4min | 2 tasks | 10 files |
+| Phase 06 P04 | 3min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,9 @@ Recent decisions affecting current work:
 - [06-02]: Rate limit check BEFORE envelope size check for fastest rejection path
 - [06-02]: Lazy limiter creation per address (memory proportional to active clients)
 - [06-02]: TypeScript handler logs only (no backoff in v1 -- rate limits for obvious abuse)
+- [06-04]: No changes to cli.ts bootstrap -- ActivityFeed evolves in-place via initSchema()
+- [06-04]: Tail verification skips genesis prev_hash check (partial chain starts at arbitrary point)
+- [06-04]: Export uses raw SQL column names (snake_case) in JSON for independent verification
 
 ### Pending Todos
 
@@ -141,5 +145,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 06-02-PLAN.md
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
