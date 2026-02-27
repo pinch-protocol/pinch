@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 	pinchv1 "github.com/pinch-protocol/pinch/gen/go/pinch/v1"
@@ -53,6 +55,20 @@ func main() {
 		}
 	}
 
+	rateLimit := 1.0 // messages per second (sustained)
+	if v := os.Getenv("PINCH_RELAY_RATE_LIMIT"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			rateLimit = f
+		}
+	}
+
+	rateBurst := 10
+	if v := os.Getenv("PINCH_RELAY_RATE_BURST"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			rateBurst = n
+		}
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -78,7 +94,10 @@ func main() {
 	slog.Info("message queue ready", "maxPerAgent", queueMax, "ttl", queueTTL)
 	mq.StartSweep(ctx)
 
-	h := hub.NewHub(blockStore, mq)
+	rl := hub.NewRateLimiter(rate.Limit(rateLimit), rateBurst)
+	slog.Info("rate limiter ready", "rate", rateLimit, "burst", rateBurst)
+
+	h := hub.NewHub(blockStore, mq, rl)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()

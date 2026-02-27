@@ -40,6 +40,7 @@ const (
 	MessageType_MESSAGE_TYPE_UNBLOCK_NOTIFICATION MessageType = 12
 	MessageType_MESSAGE_TYPE_QUEUE_STATUS         MessageType = 13
 	MessageType_MESSAGE_TYPE_QUEUE_FULL           MessageType = 14
+	MessageType_MESSAGE_TYPE_RATE_LIMITED         MessageType = 15
 )
 
 // Enum value maps for MessageType.
@@ -60,6 +61,7 @@ var (
 		12: "MESSAGE_TYPE_UNBLOCK_NOTIFICATION",
 		13: "MESSAGE_TYPE_QUEUE_STATUS",
 		14: "MESSAGE_TYPE_QUEUE_FULL",
+		15: "MESSAGE_TYPE_RATE_LIMITED",
 	}
 	MessageType_value = map[string]int32{
 		"MESSAGE_TYPE_UNSPECIFIED":          0,
@@ -77,6 +79,7 @@ var (
 		"MESSAGE_TYPE_UNBLOCK_NOTIFICATION": 12,
 		"MESSAGE_TYPE_QUEUE_STATUS":         13,
 		"MESSAGE_TYPE_QUEUE_FULL":           14,
+		"MESSAGE_TYPE_RATE_LIMITED":         15,
 	}
 )
 
@@ -133,6 +136,7 @@ type Envelope struct {
 	//	*Envelope_DeliveryConfirm
 	//	*Envelope_QueueStatus
 	//	*Envelope_QueueFull
+	//	*Envelope_RateLimited
 	Payload       isEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -343,6 +347,15 @@ func (x *Envelope) GetQueueFull() *QueueFull {
 	return nil
 }
 
+func (x *Envelope) GetRateLimited() *RateLimited {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_RateLimited); ok {
+			return x.RateLimited
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Payload interface {
 	isEnvelope_Payload()
 }
@@ -403,6 +416,10 @@ type Envelope_QueueFull struct {
 	QueueFull *QueueFull `protobuf:"bytes,23,opt,name=queue_full,json=queueFull,proto3,oneof"`
 }
 
+type Envelope_RateLimited struct {
+	RateLimited *RateLimited `protobuf:"bytes,24,opt,name=rate_limited,json=rateLimited,proto3,oneof"`
+}
+
 func (*Envelope_Encrypted) isEnvelope_Payload() {}
 
 func (*Envelope_Handshake) isEnvelope_Payload() {}
@@ -430,6 +447,8 @@ func (*Envelope_DeliveryConfirm) isEnvelope_Payload() {}
 func (*Envelope_QueueStatus) isEnvelope_Payload() {}
 
 func (*Envelope_QueueFull) isEnvelope_Payload() {}
+
+func (*Envelope_RateLimited) isEnvelope_Payload() {}
 
 // EncryptedPayload is an opaque encrypted blob. The relay cannot read this.
 type EncryptedPayload struct {
@@ -1328,11 +1347,65 @@ func (x *QueueFull) GetReason() string {
 	return ""
 }
 
+// RateLimited is sent to the sender when their messages exceed the
+// per-connection rate limit. Contains retry-after information.
+type RateLimited struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RetryAfterMs  int64                  `protobuf:"varint,1,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"` // milliseconds until sender can retry
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`                                    // human-readable explanation
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateLimited) Reset() {
+	*x = RateLimited{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateLimited) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateLimited) ProtoMessage() {}
+
+func (x *RateLimited) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateLimited.ProtoReflect.Descriptor instead.
+func (*RateLimited) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RateLimited) GetRetryAfterMs() int64 {
+	if x != nil {
+		return x.RetryAfterMs
+	}
+	return 0
+}
+
+func (x *RateLimited) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 var File_pinch_v1_envelope_proto protoreflect.FileDescriptor
 
 const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x17pinch/v1/envelope.proto\x12\bpinch.v1\"\xff\b\n" +
+	"\x17pinch/v1/envelope.proto\x12\bpinch.v1\"\xbb\t\n" +
 	"\bEnvelope\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\rR\aversion\x12!\n" +
 	"\ffrom_address\x18\x02 \x01(\tR\vfromAddress\x12\x1d\n" +
@@ -1358,7 +1431,8 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\x10delivery_confirm\x18\x15 \x01(\v2\x19.pinch.v1.DeliveryConfirmH\x00R\x0fdeliveryConfirm\x12:\n" +
 	"\fqueue_status\x18\x16 \x01(\v2\x15.pinch.v1.QueueStatusH\x00R\vqueueStatus\x124\n" +
 	"\n" +
-	"queue_full\x18\x17 \x01(\v2\x13.pinch.v1.QueueFullH\x00R\tqueueFullB\t\n" +
+	"queue_full\x18\x17 \x01(\v2\x13.pinch.v1.QueueFullH\x00R\tqueueFull\x12:\n" +
+	"\frate_limited\x18\x18 \x01(\v2\x15.pinch.v1.RateLimitedH\x00R\vrateLimitedB\t\n" +
 	"\apayload\"t\n" +
 	"\x10EncryptedPayload\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12\x1e\n" +
@@ -1427,7 +1501,10 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\rpending_count\x18\x01 \x01(\x05R\fpendingCount\"P\n" +
 	"\tQueueFull\x12+\n" +
 	"\x11recipient_address\x18\x01 \x01(\tR\x10recipientAddress\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason*\xf6\x03\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"K\n" +
+	"\vRateLimited\x12$\n" +
+	"\x0eretry_after_ms\x18\x01 \x01(\x03R\fretryAfterMs\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason*\x95\x04\n" +
 	"\vMessageType\x12\x1c\n" +
 	"\x18MESSAGE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16MESSAGE_TYPE_HANDSHAKE\x10\x01\x12\x1f\n" +
@@ -1444,7 +1521,8 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\x1fMESSAGE_TYPE_BLOCK_NOTIFICATION\x10\v\x12%\n" +
 	"!MESSAGE_TYPE_UNBLOCK_NOTIFICATION\x10\f\x12\x1d\n" +
 	"\x19MESSAGE_TYPE_QUEUE_STATUS\x10\r\x12\x1b\n" +
-	"\x17MESSAGE_TYPE_QUEUE_FULL\x10\x0eB\x97\x01\n" +
+	"\x17MESSAGE_TYPE_QUEUE_FULL\x10\x0e\x12\x1d\n" +
+	"\x19MESSAGE_TYPE_RATE_LIMITED\x10\x0fB\x97\x01\n" +
 	"\fcom.pinch.v1B\rEnvelopeProtoP\x01Z7github.com/pinch-protocol/pinch/gen/go/pinch/v1;pinchv1\xa2\x02\x03PXX\xaa\x02\bPinch.V1\xca\x02\bPinch\\V1\xe2\x02\x14Pinch\\V1\\GPBMetadata\xea\x02\tPinch::V1b\x06proto3"
 
 var (
@@ -1460,7 +1538,7 @@ func file_pinch_v1_envelope_proto_rawDescGZIP() []byte {
 }
 
 var file_pinch_v1_envelope_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pinch_v1_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_pinch_v1_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_pinch_v1_envelope_proto_goTypes = []any{
 	(MessageType)(0),            // 0: pinch.v1.MessageType
 	(*Envelope)(nil),            // 1: pinch.v1.Envelope
@@ -1479,6 +1557,7 @@ var file_pinch_v1_envelope_proto_goTypes = []any{
 	(*DeliveryConfirm)(nil),     // 14: pinch.v1.DeliveryConfirm
 	(*QueueStatus)(nil),         // 15: pinch.v1.QueueStatus
 	(*QueueFull)(nil),           // 16: pinch.v1.QueueFull
+	(*RateLimited)(nil),         // 17: pinch.v1.RateLimited
 }
 var file_pinch_v1_envelope_proto_depIdxs = []int32{
 	0,  // 0: pinch.v1.Envelope.type:type_name -> pinch.v1.MessageType
@@ -1496,11 +1575,12 @@ var file_pinch_v1_envelope_proto_depIdxs = []int32{
 	14, // 12: pinch.v1.Envelope.delivery_confirm:type_name -> pinch.v1.DeliveryConfirm
 	15, // 13: pinch.v1.Envelope.queue_status:type_name -> pinch.v1.QueueStatus
 	16, // 14: pinch.v1.Envelope.queue_full:type_name -> pinch.v1.QueueFull
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	17, // 15: pinch.v1.Envelope.rate_limited:type_name -> pinch.v1.RateLimited
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_pinch_v1_envelope_proto_init() }
@@ -1523,6 +1603,7 @@ func file_pinch_v1_envelope_proto_init() {
 		(*Envelope_DeliveryConfirm)(nil),
 		(*Envelope_QueueStatus)(nil),
 		(*Envelope_QueueFull)(nil),
+		(*Envelope_RateLimited)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1530,7 +1611,7 @@ func file_pinch_v1_envelope_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pinch_v1_envelope_proto_rawDesc), len(file_pinch_v1_envelope_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

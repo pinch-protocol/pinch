@@ -21,6 +21,7 @@ enum MessageType {
   MESSAGE_TYPE_UNBLOCK_NOTIFICATION = 12;
   MESSAGE_TYPE_QUEUE_STATUS = 13;
   MESSAGE_TYPE_QUEUE_FULL = 14;
+  MESSAGE_TYPE_RATE_LIMITED = 15;
 }
 
 // Envelope is the outer wire message. The relay can read this for routing
@@ -48,6 +49,7 @@ message Envelope {
     DeliveryConfirm delivery_confirm = 21;
     QueueStatus queue_status = 22;
     QueueFull queue_full = 23;
+    RateLimited rate_limited = 24;
   }
 }
 
@@ -157,4 +159,11 @@ message QueueStatus {
 message QueueFull {
   string recipient_address = 1;
   string reason = 2;
+}
+
+// RateLimited is sent to the sender when their messages exceed the
+// per-connection rate limit. Contains retry-after information.
+message RateLimited {
+  int64 retry_after_ms = 1;  // milliseconds until sender can retry
+  string reason = 2;          // human-readable explanation
 }

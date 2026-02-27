@@ -27,7 +27,7 @@ import (
 func newTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hub) {
 	t.Helper()
 
-	h := hub.NewHub(nil, nil)
+	h := hub.NewHub(nil, nil, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -357,7 +357,7 @@ func newTestServerWithBlockStore(t *testing.T, ctx context.Context) (*httptest.S
 		t.Fatalf("NewBlockStore: %v", err)
 	}
 
-	h := hub.NewHub(bs, nil)
+	h := hub.NewHub(bs, nil, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -733,7 +733,7 @@ func newAuthTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hu
 		t.Fatalf("NewBlockStore: %v", err)
 	}
 
-	h := hub.NewHub(bs, nil)
+	h := hub.NewHub(bs, nil, nil)
 	go h.Run(ctx)
 
 	const relayHost = "localhost"
@@ -1000,7 +1000,7 @@ func TestAuthHandshakeTimeout(t *testing.T) {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
 
-	h := hub.NewHub(bs, nil)
+	h := hub.NewHub(bs, nil, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -1300,7 +1300,7 @@ func newTestServerWithMQ(t *testing.T, ctx context.Context, maxPerAgent int) (*h
 		t.Fatalf("NewMessageQueue: %v", err)
 	}
 
-	h := hub.NewHub(nil, mq)
+	h := hub.NewHub(nil, mq, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()

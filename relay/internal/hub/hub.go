@@ -51,6 +51,10 @@ type Hub struct {
 	// for tests that don't need store-and-forward.
 	mq *store.MessageQueue
 
+	// rateLimiter enforces per-connection token bucket rate limiting.
+	// Can be nil to disable rate limiting (e.g., tests).
+	rateLimiter *RateLimiter
+
 	// mu protects external reads of the routing table.
 	mu sync.RWMutex
 }
@@ -58,13 +62,15 @@ type Hub struct {
 // NewHub creates a new Hub with initialized channels and routing table.
 // blockStore may be nil if block enforcement is not needed (e.g., tests).
 // mq may be nil if store-and-forward is not needed (e.g., tests).
-func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue) *Hub {
+// rl may be nil to disable rate limiting (e.g., tests).
+func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue, rl *RateLimiter) *Hub {
 	return &Hub{
-		clients:    make(map[string]*Client),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		blockStore: blockStore,
-		mq:         mq,
+		clients:     make(map[string]*Client),
+		register:    make(chan *Client),
+		unregister:  make(chan *Client),
+		blockStore:  blockStore,
+		mq:          mq,
+		rateLimiter: rl,
 	}
 }
 
@@ -103,6 +109,9 @@ func (h *Hub) Run(ctx context.Context) {
 				client.cancel()
 			}
 			h.mu.Unlock()
+			if h.rateLimiter != nil {
+				h.rateLimiter.Remove(client.address)
+			}
 			slog.Info("client unregistered",
 				"address", client.address,
 				"connections", h.ClientCount(),
@@ -230,6 +239,12 @@ func (h *Hub) Unregister(client *Client) {
 // Blocked and undeliverable messages are silently dropped.
 // Envelopes exceeding 64KB are silently dropped.
 func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
+	// Enforce per-connection rate limit.
+	if h.rateLimiter != nil && !h.rateLimiter.Allow(from.Address()) {
+		h.sendRateLimited(from)
+		return nil
+	}
+
 	// Enforce maximum envelope size.
 	if len(envelope) > maxEnvelopeSize {
 		slog.Debug("route: envelope exceeds max size",
@@ -348,6 +363,26 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 
 	recipient.Send(envelope)
 	return nil
+}
+
+// sendRateLimited sends a RateLimited error envelope to the sender.
+func (h *Hub) sendRateLimited(client *Client) {
+	env := &pinchv1.Envelope{
+		Version: 1,
+		Type:    pinchv1.MessageType_MESSAGE_TYPE_RATE_LIMITED,
+		Payload: &pinchv1.Envelope_RateLimited{
+			RateLimited: &pinchv1.RateLimited{
+				RetryAfterMs: 1000,
+				Reason:       "per-connection rate limit exceeded",
+			},
+		},
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		slog.Error("failed to marshal RateLimited", "error", err)
+		return
+	}
+	client.Send(data)
 }
 
 // sendQueueFull sends a QueueFull error envelope to the sender.
