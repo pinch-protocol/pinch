@@ -43,6 +43,9 @@ type Client struct {
 	// to this client. While true, new real-time messages are enqueued to
 	// bbolt instead of delivered directly to preserve ordering.
 	flushing atomic.Bool
+
+	// closed indicates Shutdown has been invoked.
+	closed atomic.Bool
 }
 
 // NewClient creates a new Client bound to the given hub and WebSocket connection.
@@ -154,15 +157,39 @@ func (c *Client) HeartbeatLoop() {
 	}
 }
 
-// Send writes data to the client's outbound channel. If the channel
-// is full, the message is dropped to prevent blocking the sender.
-func (c *Client) Send(data []byte) {
+// Send writes data to the client's outbound channel.
+// Returns true if the message was queued, false if dropped.
+func (c *Client) Send(data []byte) (ok bool) {
+	if c.closed.Load() || c.ctx.Err() != nil {
+		return false
+	}
+
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+
 	select {
 	case c.send <- data:
+		return true
 	default:
 		slog.Debug("send buffer full, dropping message",
 			"address", c.address,
 		)
+		return false
+	}
+}
+
+// Shutdown cancels client goroutines and closes outbound resources once.
+func (c *Client) Shutdown() {
+	if !c.closed.CompareAndSwap(false, true) {
+		return
+	}
+	c.cancel()
+	close(c.send)
+	if c.conn != nil {
+		_ = c.conn.Close(websocket.StatusNormalClosure, "closed")
 	}
 }
 
@@ -181,4 +208,3 @@ func (c *Client) IsFlushing() bool {
 func (c *Client) SetFlushing(v bool) {
 	c.flushing.Store(v)
 }
-

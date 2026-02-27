@@ -12,7 +12,7 @@
  * Outputs JSON: { "status": "muted"|"unmuted", "connection": "<address>" }
  */
 
-import { bootstrap, shutdown } from "./cli.js";
+import { bootstrapLocal, shutdownLocal } from "./cli.js";
 
 /** Parsed arguments for pinch_mute. */
 export interface MuteArgs {
@@ -44,7 +44,7 @@ export function parseArgs(args: string[]): MuteArgs {
 /** Execute the pinch_mute tool. */
 export async function run(args: string[]): Promise<void> {
 	const parsed = parseArgs(args);
-	const { connectionStore, activityFeed } = await bootstrap();
+	const { connectionStore, activityFeed } = await bootstrapLocal();
 
 	connectionStore.updateConnection(parsed.connection, {
 		muted: !parsed.unmute,
@@ -66,7 +66,7 @@ export async function run(args: string[]): Promise<void> {
 		}),
 	);
 
-	await shutdown();
+	await shutdownLocal();
 }
 
 // Self-executable entry point.
