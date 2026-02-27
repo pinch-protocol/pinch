@@ -8,8 +8,8 @@ import {
 	QueueStatusSchema,
 	QueueFullSchema,
 	MessageType,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
-import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
+} from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
+import type { Envelope } from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
 import { join } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

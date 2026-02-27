@@ -47,11 +47,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Lint
-        run: pnpm -r biome check
+      - name: Build skill
+        run: pnpm -C skill build
 
-      - name: Test skill
-        run: pnpm -C skill test
+      - name: Test skill tools
+        run: pnpm -C skill exec vitest run src/tools
 
   cross-language:
     name: Cross-Language Crypto

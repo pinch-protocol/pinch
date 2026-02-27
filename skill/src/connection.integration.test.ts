@@ -24,8 +24,8 @@ import {
 	BlockNotificationSchema,
 	UnblockNotificationSchema,
 	MessageType,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
-import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
+} from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
+import type { Envelope } from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
 import { RelayClient } from "./relay-client.js";
 import { generateKeypair } from "./identity.js";
 import type { Keypair } from "./identity.js";

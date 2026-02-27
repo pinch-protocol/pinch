@@ -3,14 +3,14 @@ import { fromBinary } from "@bufbuild/protobuf";
 import {
 	EnvelopeSchema,
 	MessageType,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
-import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
+} from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
+import type { Envelope } from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
 import { create } from "@bufbuild/protobuf";
 import {
 	ConnectionRequestSchema,
 	ConnectionResponseSchema,
 	ConnectionRevokeSchema,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
+} from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
 import { ConnectionManager } from "./connection.js";
 import { ConnectionStore } from "./connection-store.js";
 import type { RelayClient } from "./relay-client.js";

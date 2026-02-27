@@ -27,7 +27,7 @@ type QueueEntry struct {
 type queuedMessage struct {
 	EnqueuedAt int64  `json:"enqueued_at"` // Unix nanoseconds
 	SenderAddr string `json:"sender_addr"`
-	Envelope   []byte `json:"envelope"`    // Raw serialized protobuf
+	Envelope   []byte `json:"envelope"` // Raw serialized protobuf
 }
 
 // MessageQueue provides durable message queuing backed by bbolt.
@@ -165,7 +165,7 @@ func (mq *MessageQueue) Remove(recipientAddr string, key []byte) error {
 // Returns 0 if no messages are queued.
 func (mq *MessageQueue) Count(recipientAddr string) int {
 	var count int
-	mq.db.View(func(tx *bolt.Tx) error {
+	if err := mq.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket(queueBucket)
 		if root == nil {
 			return nil
@@ -176,7 +176,9 @@ func (mq *MessageQueue) Count(recipientAddr string) int {
 		}
 		count = sub.Stats().KeyN
 		return nil
-	})
+	}); err != nil {
+		return 0
+	}
 	return count
 }
 
@@ -202,7 +204,7 @@ func (mq *MessageQueue) Sweep() (int, error) {
 
 			// Pass 1: collect expired keys.
 			var expired [][]byte
-			sub.ForEach(func(k, v []byte) error {
+			if err := sub.ForEach(func(k, v []byte) error {
 				var msg queuedMessage
 				if err := json.Unmarshal(v, &msg); err != nil {
 					// Collect corrupt entries for cleanup too.
@@ -213,11 +215,15 @@ func (mq *MessageQueue) Sweep() (int, error) {
 					expired = append(expired, append([]byte{}, k...))
 				}
 				return nil
-			})
+			}); err != nil {
+				return err
+			}
 
 			// Pass 2: delete collected keys.
 			for _, k := range expired {
-				sub.Delete(k)
+				if err := sub.Delete(k); err != nil {
+					return err
+				}
 			}
 
 			if len(expired) > 0 {

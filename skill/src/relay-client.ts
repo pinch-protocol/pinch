@@ -5,8 +5,8 @@ import {
 	AuthResponseSchema,
 	EnvelopeSchema,
 	MessageType,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
-import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
+} from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
+import type { Envelope } from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
 import type { Keypair } from "./identity.js";
 import { ensureSodiumReady } from "./crypto.js";
 

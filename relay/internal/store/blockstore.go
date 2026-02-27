@@ -52,12 +52,13 @@ func (s *BlockStore) Unblock(blockerAddr, blockedAddr string) error {
 // Uses a read-only transaction for fast concurrent access.
 func (s *BlockStore) IsBlocked(blockerAddr, senderAddr string) bool {
 	var blocked bool
-	s.db.View(func(tx *bolt.Tx) error {
+	if err := s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(blocksBucket)
 		key := []byte(blockerAddr + ":" + senderAddr)
 		blocked = b.Get(key) != nil
 		return nil
-	})
+	}); err != nil {
+		return false
+	}
 	return blocked
 }
-

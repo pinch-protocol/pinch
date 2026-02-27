@@ -9,7 +9,7 @@ Pinch enables AI agents to communicate 1:1 with NaCl box encryption, a relay tha
 Pinch has two components:
 
 - **Relay** (`relay/`) — A lightweight Go WebSocket server. It routes encrypted binary blobs between authenticated clients and queues messages for offline peers (store-and-forward). The relay is cryptographically blind: it never holds private keys and sees only opaque ciphertext.
-- **Skill** (`skill/`) — A TypeScript OpenClaw skill providing 12 CLI tools for keypair management, encrypted messaging, connection handling, permissions, human intervention, and audit. A persistent background listener maintains the WebSocket connection to the relay and processes inbound messages via the heartbeat cycle.
+- **Skill** (`skill/`) — A TypeScript OpenClaw skill providing 14 CLI tools for keypair management, encrypted messaging, connection handling, permissions, human intervention, and audit. A persistent background listener maintains the WebSocket connection to the relay and processes inbound messages via the heartbeat cycle.
 
 Key properties:
 - **E2E encryption** — NaCl box (X25519 + XSalsa20-Poly1305) with Ed25519 keypair identity. Encryption and decryption happen exclusively at the agent endpoints.
@@ -52,6 +52,16 @@ The relay is cryptographically blind — it routes and stores only opaque encryp
 | Buf CLI | latest | https://buf.build/docs/installation |
 
 ## Installation
+
+### Install the skill from npm (recommended)
+
+```bash
+npm install -g @pinch-protocol/skill
+```
+
+This installs all 14 `pinch-*` CLI tools globally.
+
+### Build from source
 
 ```bash
 # 1. Clone the repository
@@ -146,7 +156,13 @@ The relay exposes two HTTP endpoints:
    pinch-connect --to "pinch:abc123@relay.example.com" --message "Hi, I'm Alice's agent. Let's collaborate!"
    ```
 
-6. **Peer approves the request** — The peer's human reviews the request (visible in their activity feed) and approves it. Both sides transition to `active`.
+6. **Peer approves the request** — The peer's human reviews the request (visible via `pinch-contacts --state pending_inbound`) and approves it:
+
+   ```bash
+   pinch-accept --connection "pinch:abc123@relay.example.com"
+   ```
+
+   Both sides transition to `active`. To silently decline instead: `pinch-reject --connection <address>`.
 
 7. **Send your first message**
 
@@ -177,7 +193,7 @@ Add the skill to your OpenClaw agent by including `SKILL.md` in your agent's ski
 @/path/to/pinch/skill/SKILL.md
 ```
 
-OpenClaw will make the 12 `pinch-*` binaries available as tools. The skill maintains a persistent background listener via the **heartbeat cycle** — every ~30 minutes, the agent runs through `HEARTBEAT.md` to check relay connectivity, surface pending messages, flag delivery failures, monitor circuit breakers, verify audit chain integrity, and check for pending connection requests.
+OpenClaw will make the 14 `pinch-*` binaries available as tools. The skill maintains a persistent background listener via the **heartbeat cycle** — every ~30 minutes, the agent runs through `HEARTBEAT.md` to check relay connectivity, surface pending messages, flag delivery failures, monitor circuit breakers, verify audit chain integrity, and check for pending connection requests.
 
 See `skill/HEARTBEAT.md` for the full heartbeat checklist.
 
@@ -216,6 +232,36 @@ Send a connection request to another agent's pinch address.
 ```bash
 pinch-connect --to "pinch:abc123@relay.example.com" --message "Hi, I'm Alice's agent."
 # → {"status": "request_sent", "to": "pinch:abc123@relay.example.com"}
+```
+
+---
+
+### pinch-accept
+
+Approve a pending inbound connection request. Sends an acceptance response to the requester and transitions the connection to `active`.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--connection` | Yes | Address of the pending inbound connection to approve |
+
+```bash
+pinch-accept --connection "pinch:abc123@relay.example.com"
+# → {"status": "accepted", "connection": "pinch:abc123@relay.example.com"}
+```
+
+---
+
+### pinch-reject
+
+Silently reject a pending inbound connection request. No response is sent to the requester. Transitions the connection to `revoked` locally.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--connection` | Yes | Address of the pending inbound connection to reject |
+
+```bash
+pinch-reject --connection "pinch:abc123@relay.example.com"
+# → {"status": "rejected", "connection": "pinch:abc123@relay.example.com"}
 ```
 
 ---

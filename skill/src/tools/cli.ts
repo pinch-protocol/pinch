@@ -10,21 +10,21 @@
  * performs its operation, then calls shutdown() to clean up.
  */
 
-import { join } from "node:path";
 import { homedir } from "node:os";
-import { loadKeypair, generateKeypair, saveKeypair } from "../identity.js";
-import { RelayClient } from "../relay-client.js";
-import { ConnectionStore } from "../connection-store.js";
-import { MessageStore } from "../message-store.js";
-import { ConnectionManager } from "../connection.js";
-import { MessageManager } from "../message-manager.js";
-import { InboundRouter } from "../inbound-router.js";
+import { join } from "node:path";
 import { ActivityFeed } from "../autonomy/activity-feed.js";
-import { PermissionsEnforcer } from "../autonomy/permissions-enforcer.js";
-import { NoOpPolicyEvaluator } from "../autonomy/policy-evaluator.js";
 import { CircuitBreaker } from "../autonomy/circuit-breaker.js";
 import { EnforcementPipeline } from "../autonomy/enforcement-pipeline.js";
+import { PermissionsEnforcer } from "../autonomy/permissions-enforcer.js";
+import { NoOpPolicyEvaluator } from "../autonomy/policy-evaluator.js";
+import { ConnectionStore } from "../connection-store.js";
+import { ConnectionManager } from "../connection.js";
+import { generateKeypair, loadKeypair, saveKeypair } from "../identity.js";
 import type { Keypair } from "../identity.js";
+import { InboundRouter } from "../inbound-router.js";
+import { MessageManager } from "../message-manager.js";
+import { MessageStore } from "../message-store.js";
+import { RelayClient } from "../relay-client.js";
 
 /** All initialized runtime components returned by bootstrap(). */
 export interface BootstrapResult {
@@ -43,6 +43,47 @@ export interface BootstrapResult {
 
 let bootstrapped: BootstrapResult | null = null;
 
+/** Parse the required `--connection` flag used by connection-management tools. */
+export function parseConnectionArg(args: string[]): { connection: string } {
+	let connection = "";
+	for (let i = 0; i < args.length; i++) {
+		if (args[i] === "--connection") {
+			connection = args[++i] ?? "";
+			break;
+		}
+	}
+
+	if (!connection) throw new Error("--connection is required");
+	return { connection };
+}
+
+/** True when running as the named tool script (ts or built js). */
+export function isToolEntrypoint(
+	scriptPath: string | undefined,
+	toolName: string,
+): boolean {
+	if (!scriptPath) return false;
+	return (
+		scriptPath.endsWith(`${toolName}.ts`) ||
+		scriptPath.endsWith(`${toolName}.js`)
+	);
+}
+
+/**
+ * Run a tool when the current process is executing its script directly.
+ * This keeps entrypoint/error boilerplate shared across CLI tools.
+ */
+export function runToolEntrypoint(
+	toolName: string,
+	runFn: (args: string[]) => Promise<void>,
+): void {
+	if (!isToolEntrypoint(process.argv[1], toolName)) return;
+	runFn(process.argv.slice(2)).catch((err) => {
+		console.error(JSON.stringify({ error: String(err.message ?? err) }));
+		process.exit(1);
+	});
+}
+
 /**
  * Initialize all runtime components from environment variables.
  *
@@ -56,8 +97,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
 	if (bootstrapped) return bootstrapped;
 
 	const keypairPath =
-		process.env.PINCH_KEYPAIR_PATH ??
-		join(homedir(), ".pinch", "keypair.json");
+		process.env.PINCH_KEYPAIR_PATH ?? join(homedir(), ".pinch", "keypair.json");
 	const relayUrl = process.env.PINCH_RELAY_URL;
 	if (!relayUrl) {
 		throw new Error("PINCH_RELAY_URL environment variable is required");
@@ -90,9 +130,16 @@ export async function bootstrap(): Promise<BootstrapResult> {
 	const messageStore = new MessageStore(join(dataDir, "messages.db"));
 	const activityFeed = new ActivityFeed(messageStore.getDb());
 	const policyEvaluator = new NoOpPolicyEvaluator();
-	const permissionsEnforcer = new PermissionsEnforcer(connectionStore, policyEvaluator);
+	const permissionsEnforcer = new PermissionsEnforcer(
+		connectionStore,
+		policyEvaluator,
+	);
 	const circuitBreaker = new CircuitBreaker(connectionStore, activityFeed);
-	const inboundRouter = new InboundRouter(connectionStore, messageStore, activityFeed);
+	const inboundRouter = new InboundRouter(
+		connectionStore,
+		messageStore,
+		activityFeed,
+	);
 	const enforcementPipeline = new EnforcementPipeline(
 		permissionsEnforcer,
 		circuitBreaker,
@@ -180,8 +227,7 @@ export async function bootstrapLocal(): Promise<LocalBootstrapResult> {
 	if (localBootstrapped) return localBootstrapped;
 
 	const keypairPath =
-		process.env.PINCH_KEYPAIR_PATH ??
-		join(homedir(), ".pinch", "keypair.json");
+		process.env.PINCH_KEYPAIR_PATH ?? join(homedir(), ".pinch", "keypair.json");
 	const dataDir =
 		process.env.PINCH_DATA_DIR ?? join(homedir(), ".pinch", "data");
 

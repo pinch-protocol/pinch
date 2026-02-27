@@ -9,7 +9,7 @@ import {
 	AuthResponseSchema,
 	MessageType,
 	MessageTypeSchema,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
+} from "@pinch-protocol/proto/pinch/v1/envelope_pb.js";
 
 describe("Envelope serialization round-trip", () => {
 	it("should round-trip an Envelope with EncryptedPayload", () => {

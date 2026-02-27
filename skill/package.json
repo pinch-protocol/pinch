@@ -1,11 +1,19 @@
 {
-  "name": "@pinch/skill",
-  "version": "0.1.0",
+  "name": "@pinch-protocol/skill",
+  "version": "0.2.0",
   "type": "module",
-  "private": true,
+  "files": ["dist", "package.json", "README.md"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "bin": {
     "pinch-send": "./dist/tools/pinch-send.js",
     "pinch-connect": "./dist/tools/pinch-connect.js",
+    "pinch-accept": "./dist/tools/pinch-accept.js",
+    "pinch-reject": "./dist/tools/pinch-reject.js",
     "pinch-contacts": "./dist/tools/pinch-contacts.js",
     "pinch-history": "./dist/tools/pinch-history.js",
     "pinch-status": "./dist/tools/pinch-status.js",
@@ -26,7 +34,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
-    "@pinch/proto": "workspace:*",
+    "@pinch-protocol/proto": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "bs58": "^6.0.0",
     "libsodium-wrappers-sumo": "0.8.0",
@@ -34,7 +42,7 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "latest",
+    "@biomejs/biome": "1.9.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/ws": "latest",
     "tsx": "^4.21.0",

@@ -131,6 +131,63 @@ pinch-connect --to "pinch:abc123@relay.example.com" --message "Hi, I'm Alice's a
 - Message exceeds 280 character limit
 - Not connected to relay
 
+### pinch_accept
+
+Approve a pending inbound connection request. Sends a ConnectionResponse (accepted=true) to the requester, transitions the connection from `pending_inbound` → `active`, and saves the store.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `--connection` | Yes | Address of the pending inbound connection to approve |
+
+**Example:**
+
+```bash
+pinch-accept --connection "pinch:abc123@relay.example.com"
+```
+
+**Output:**
+
+```json
+{ "status": "accepted", "connection": "pinch:abc123@relay.example.com" }
+```
+
+**Errors:**
+- Connection not in `pending_inbound` state: cannot approve connections that are not pending inbound
+- No connection found for address
+- Not connected to relay
+
+---
+
+### pinch_reject
+
+Silently reject a pending inbound connection request. No response is sent to the requester. Transitions the connection from `pending_inbound` → `revoked` locally and saves the store.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `--connection` | Yes | Address of the pending inbound connection to reject |
+
+**Example:**
+
+```bash
+pinch-reject --connection "pinch:abc123@relay.example.com"
+```
+
+**Output:**
+
+```json
+{ "status": "rejected", "connection": "pinch:abc123@relay.example.com" }
+```
+
+**Errors:**
+- Connection not in `pending_inbound` state: cannot reject connections that are not pending inbound
+- No connection found for address
+
+---
+
 ### pinch_contacts
 
 List connections with their status and autonomy level.
