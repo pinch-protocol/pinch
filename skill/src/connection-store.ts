@@ -2,9 +2,9 @@
  * JSON-backed connection state persistence for the Pinch agent.
  *
  * Persists all connections with states: active, pending_outbound,
- * pending_inbound, blocked, revoked. Each connection has an autonomy
- * level (full_manual or full_auto) that controls message processing
- * behavior (enforcement deferred to Phase 3+).
+ * pending_inbound, blocked, revoked. Each connection has a 4-tier
+ * autonomy level (full_manual, notify, auto_respond, full_auto) that
+ * controls message processing behavior.
  *
  * New connections default to full_manual. Upgrading to full_auto
  * requires explicit confirmation (confirmed: true) -- the data-layer
@@ -14,6 +14,11 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { validateAddress } from "./identity.js";
+import {
+	type PermissionsManifest,
+	defaultPermissionsManifest,
+	validateManifest,
+} from "./autonomy/permissions-manifest.js";
 
 /** Connection lifecycle states. */
 export type ConnectionState =
@@ -24,7 +29,7 @@ export type ConnectionState =
 	| "revoked";
 
 /** Per-connection autonomy level controlling message processing. */
-export type AutonomyLevel = "full_manual" | "full_auto";
+export type AutonomyLevel = "full_manual" | "notify" | "auto_respond" | "full_auto";
 
 /** A single connection to a peer agent. */
 export interface Connection {
@@ -38,6 +43,16 @@ export interface Connection {
 	nickname: string;
 	/** Autonomy level for message processing. */
 	autonomyLevel: AutonomyLevel;
+	/** Free-text natural language policy for auto_respond evaluation. */
+	autoRespondPolicy?: string;
+	/** Whether the circuit breaker has been tripped (persists across restarts). */
+	circuitBreakerTripped?: boolean;
+	/** Permissions manifest for domain-specific capability tiers. */
+	permissionsManifest?: PermissionsManifest;
+	/** Whether the connection is muted. Muted messages are delivered (confirmations sent) but not surfaced. */
+	muted?: boolean;
+	/** Whether the human is in passthrough mode for this connection. */
+	passthrough?: boolean;
 	/** Free-text message from connection request (max 280 chars). */
 	shortMessage?: string;
 	/** ISO timestamp when connection was created. */
@@ -149,6 +164,9 @@ export class ConnectionStore {
 			...conn,
 			// Enforce default autonomy = full_manual per AUTO-02.
 			autonomyLevel: conn.autonomyLevel ?? "full_manual",
+			// Enforce deny-by-default permissions manifest.
+			permissionsManifest:
+				conn.permissionsManifest ?? defaultPermissionsManifest(),
 			createdAt: now,
 			lastActivity: now,
 		};
@@ -172,6 +190,11 @@ export class ConnectionStore {
 				| "autonomyLevel"
 				| "peerPublicKey"
 				| "lastActivity"
+				| "autoRespondPolicy"
+				| "circuitBreakerTripped"
+				| "permissionsManifest"
+				| "muted"
+				| "passthrough"
 			>
 		>,
 	): Connection {
@@ -212,10 +235,10 @@ export class ConnectionStore {
 			throw new Error(`connection not found: ${peerAddress}`);
 		}
 
-		// Gate: upgrading to full_auto requires explicit confirmation.
+		// Gate: upgrading TO full_auto from any other level requires explicit confirmation.
 		if (
-			conn.autonomyLevel === "full_manual" &&
 			level === "full_auto" &&
+			conn.autonomyLevel !== "full_auto" &&
 			opts?.confirmed !== true
 		) {
 			throw new Error(
@@ -223,7 +246,32 @@ export class ConnectionStore {
 			);
 		}
 
+		// Clear circuit breaker flag -- human is manually overriding autonomy level.
+		if (conn.circuitBreakerTripped) {
+			conn.circuitBreakerTripped = false;
+		}
+
 		return this.updateConnection(peerAddress, { autonomyLevel: level });
+	}
+
+	/**
+	 * Set the permissions manifest for a connection.
+	 * Validates the manifest before applying.
+	 * @throws If the connection does not exist or manifest is invalid.
+	 */
+	setPermissions(
+		peerAddress: string,
+		manifest: PermissionsManifest,
+	): Connection {
+		const errors = validateManifest(manifest);
+		if (errors.length > 0) {
+			throw new Error(
+				`Invalid permissions manifest: ${errors.join("; ")}`,
+			);
+		}
+		return this.updateConnection(peerAddress, {
+			permissionsManifest: manifest,
+		});
 	}
 
 	/**
@@ -276,5 +324,18 @@ export class ConnectionStore {
 		}
 
 		return expired;
+	}
+
+	/**
+	 * Clear all passthrough flags. Called on bootstrap to prevent stuck
+	 * passthrough after disconnect.
+	 */
+	async clearPassthroughFlags(): Promise<void> {
+		for (const conn of Object.values(this.data.connections)) {
+			if (conn.passthrough) {
+				conn.passthrough = false;
+			}
+		}
+		await this.save();
 	}
 }

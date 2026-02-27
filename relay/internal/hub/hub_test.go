@@ -27,7 +27,7 @@ import (
 func newTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hub) {
 	t.Helper()
 
-	h := hub.NewHub(nil)
+	h := hub.NewHub(nil, nil, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -347,13 +347,17 @@ func newTestServerWithBlockStore(t *testing.T, ctx context.Context) (*httptest.S
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "test-blocks.db")
-	bs, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 
-	h := hub.NewHub(bs)
+	h := hub.NewHub(bs, nil, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -719,13 +723,17 @@ func newAuthTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hu
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "test-auth-blocks.db")
-	bs, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 
-	h := hub.NewHub(bs)
+	h := hub.NewHub(bs, nil, nil)
 	go h.Run(ctx)
 
 	const relayHost = "localhost"
@@ -982,13 +990,17 @@ func TestAuthHandshakeTimeout(t *testing.T) {
 
 	// Create a server with a very short auth timeout.
 	dbPath := filepath.Join(t.TempDir(), "test-timeout-blocks.db")
-	bs, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 
-	h := hub.NewHub(bs)
+	h := hub.NewHub(bs, nil, nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -1271,22 +1283,66 @@ func TestMaxEnvelopeSizeDrop(t *testing.T) {
 	}
 }
 
-func TestPendingMessageDeliveredOnReconnect(t *testing.T) {
+// newTestServerWithMQ creates a test server backed by a real bbolt database
+// with both a block store and a message queue for store-and-forward tests.
+func newTestServerWithMQ(t *testing.T, ctx context.Context, maxPerAgent int) (*httptest.Server, *hub.Hub, *store.MessageQueue) {
+	t.Helper()
+
+	dbPath := filepath.Join(t.TempDir(), "test-mq.db")
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	mq, err := store.NewMessageQueue(db, maxPerAgent, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("NewMessageQueue: %v", err)
+	}
+
+	h := hub.NewHub(nil, mq, nil)
+	go h.Run(ctx)
+
+	r := chi.NewRouter()
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		address := r.URL.Query().Get("address")
+		if address == "" {
+			http.Error(w, "missing address", http.StatusBadRequest)
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Logf("websocket accept error: %v", err)
+			return
+		}
+		client := hub.NewClient(h, conn, address, nil, ctx)
+		h.Register(client)
+		go client.ReadPump()
+		go client.WritePump()
+		go client.HeartbeatLoop()
+	})
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(func() { srv.Close() })
+	return srv, h, mq
+}
+
+func TestRouteMessageEnqueueOffline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+	srv, _, mq := newTestServerWithMQ(t, ctx, 1000)
 
-	// Connect only alice -- bob is offline.
+	// Connect alice.
 	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
 	if err != nil {
 		t.Fatalf("dial alice: %v", err)
 	}
 	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
 
-	waitForClientCount(t, h, 1, 2*time.Second)
-
-	// Alice sends a message to offline bob.
+	// Bob is offline. Send a message from Alice to Bob.
 	msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
 	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
 	err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
@@ -1296,114 +1352,78 @@ func TestPendingMessageDeliveredOnReconnect(t *testing.T) {
 	}
 
 	// Give time for routing.
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
-	// Verify message is pending.
-	if h.PendingCount("pinch:bob@localhost") != 1 {
-		t.Fatalf("expected 1 pending message, got %d", h.PendingCount("pinch:bob@localhost"))
+	// Verify message was enqueued in bbolt.
+	count := mq.Count("pinch:bob@localhost")
+	if count != 1 {
+		t.Fatalf("expected 1 queued message, got %d", count)
 	}
+}
 
-	// Now bob connects -- should receive the buffered message.
-	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+func TestRouteMessageQueueFull(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create hub with a low queue cap of 3.
+	srv, _, mq := newTestServerWithMQ(t, ctx, 3)
+
+	// Connect alice.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
 	if err != nil {
-		t.Fatalf("dial bob: %v", err)
+		t.Fatalf("dial alice: %v", err)
 	}
-	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
 
-	waitForClientCount(t, h, 2, 2*time.Second)
+	// Send 4 messages to offline bob (cap is 3, 4th should trigger QueueFull).
+	for i := 0; i < 4; i++ {
+		msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+		writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+		err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+		writeCancel()
+		if err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
 
-	// Bob should receive the pending message.
+	// Give time for routing.
+	time.Sleep(300 * time.Millisecond)
+
+	// Verify queue has exactly 3 messages (cap).
+	count := mq.Count("pinch:bob@localhost")
+	if count != 3 {
+		t.Fatalf("expected 3 queued messages (cap), got %d", count)
+	}
+
+	// Alice should have received a QueueFull envelope.
 	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
-	_, data, err := bobConn.Read(readCtx)
+	_, data, err := aliceConn.Read(readCtx)
 	readCancel()
 	if err != nil {
-		t.Fatalf("bob read: %v", err)
+		t.Fatalf("alice read QueueFull: %v", err)
 	}
 
 	var received pinchv1.Envelope
 	if err := proto.Unmarshal(data, &received); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if received.FromAddress != "pinch:alice@localhost" {
-		t.Fatalf("expected from alice, got %s", received.FromAddress)
+	if received.Type != pinchv1.MessageType_MESSAGE_TYPE_QUEUE_FULL {
+		t.Fatalf("expected QUEUE_FULL, got %v", received.Type)
 	}
-
-	// Pending messages should be cleared.
-	if h.PendingCount("pinch:bob@localhost") != 0 {
-		t.Fatalf("expected 0 pending messages after flush, got %d", h.PendingCount("pinch:bob@localhost"))
+	qf := received.GetQueueFull()
+	if qf == nil {
+		t.Fatal("expected QueueFull payload")
 	}
-}
-
-func TestPendingMessageExpires(t *testing.T) {
-	// This test uses the hub directly (not WebSocket) to avoid needing
-	// to actually wait 30 seconds. We manually insert a pending message
-	// with an expired deadline and verify the cleanup goroutine removes it.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	h := hub.NewHub(nil)
-	go h.Run(ctx)
-
-	// Use the hub's RouteMessage with a mock client to enqueue a message.
-	// First we need a "sender" client registered so RouteMessage can work.
-	// We use a nil conn client for unit-level testing by directly manipulating
-	// pending state via RouteMessage.
-
-	// Create a simple envelope addressed to an offline recipient.
-	env := &pinchv1.Envelope{
-		Version:     1,
-		FromAddress: "pinch:sender@localhost",
-		ToAddress:   "pinch:offline@localhost",
-		Type:        pinchv1.MessageType_MESSAGE_TYPE_MESSAGE,
-	}
-	data, err := proto.Marshal(env)
-	if err != nil {
-		t.Fatalf("proto.Marshal: %v", err)
-	}
-
-	// Create a minimal sender client for RouteMessage.
-	senderConn, err := dialWSForHub(ctx, t, h, "pinch:sender@localhost")
-	if err != nil {
-		t.Fatalf("create sender: %v", err)
-	}
-	defer senderConn.Close(websocket.StatusNormalClosure, "done")
-
-	waitForClientCount(t, h, 1, 2*time.Second)
-
-	// Send message to offline recipient -- should be buffered.
-	senderClient, ok := h.LookupClient("pinch:sender@localhost")
-	if !ok {
-		t.Fatal("sender not found")
-	}
-	if err := h.RouteMessage(senderClient, data); err != nil {
-		t.Fatalf("RouteMessage: %v", err)
-	}
-
-	// Verify message is pending.
-	if h.PendingCount("pinch:offline@localhost") != 1 {
-		t.Fatalf("expected 1 pending, got %d", h.PendingCount("pinch:offline@localhost"))
-	}
-
-	// Wait for cleanup + TTL to expire.
-	// The cleanup runs every 10s and messages expire after 30s.
-	// We need to wait past the TTL plus a full cleanup interval to ensure
-	// the expired message is swept. 45s accounts for timing variance.
-	// NOTE: This is a slow test (~45s). In production we'd inject the clock.
-	// For CI, we accept the cost since it validates critical behavior.
-	t.Log("waiting for pending message to expire (45 seconds)...")
-	time.Sleep(45 * time.Second)
-
-	// Verify the pending message was cleaned up.
-	if h.PendingCount("pinch:offline@localhost") != 0 {
-		t.Fatalf("expected 0 pending after expiry, got %d", h.PendingCount("pinch:offline@localhost"))
+	if qf.RecipientAddress != "pinch:bob@localhost" {
+		t.Fatalf("expected recipient bob, got %s", qf.RecipientAddress)
 	}
 }
 
-func TestPendingCapPerAddress(t *testing.T) {
+func TestFlushOnReconnect(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+	srv, h, mq := newTestServerWithMQ(t, ctx, 1000)
 
 	// Connect alice.
 	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
@@ -1414,8 +1434,8 @@ func TestPendingCapPerAddress(t *testing.T) {
 
 	waitForClientCount(t, h, 1, 2*time.Second)
 
-	// Send 110 messages to offline bob -- only 100 should be buffered.
-	for i := 0; i < 110; i++ {
+	// Send 3 messages to offline bob.
+	for i := 0; i < 3; i++ {
 		msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
 		writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
 		err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
@@ -1425,13 +1445,160 @@ func TestPendingCapPerAddress(t *testing.T) {
 		}
 	}
 
-	// Give time for all messages to be routed.
-	time.Sleep(500 * time.Millisecond)
+	// Give time for routing + enqueue.
+	time.Sleep(200 * time.Millisecond)
 
-	// Verify cap.
-	count := h.PendingCount("pinch:bob@localhost")
-	if count != 100 {
-		t.Fatalf("expected 100 pending messages (cap), got %d", count)
+	// Verify 3 messages queued.
+	count := mq.Count("pinch:bob@localhost")
+	if count != 3 {
+		t.Fatalf("expected 3 queued, got %d", count)
+	}
+
+	// Bob connects -- should receive QueueStatus + 3 flushed messages.
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// First message should be QueueStatus.
+	readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+	_, data, err := bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read QueueStatus: %v", err)
+	}
+
+	var qsEnv pinchv1.Envelope
+	if err := proto.Unmarshal(data, &qsEnv); err != nil {
+		t.Fatalf("unmarshal QueueStatus: %v", err)
+	}
+	if qsEnv.Type != pinchv1.MessageType_MESSAGE_TYPE_QUEUE_STATUS {
+		t.Fatalf("expected QUEUE_STATUS, got %v", qsEnv.Type)
+	}
+	qs := qsEnv.GetQueueStatus()
+	if qs == nil || qs.PendingCount != 3 {
+		t.Fatalf("expected pending_count=3, got %v", qs)
+	}
+
+	// Read 3 flushed messages.
+	for i := 0; i < 3; i++ {
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		_, data, err := bobConn.Read(readCtx)
+		readCancel()
+		if err != nil {
+			t.Fatalf("bob read flushed message %d: %v", i, err)
+		}
+
+		var env pinchv1.Envelope
+		if err := proto.Unmarshal(data, &env); err != nil {
+			t.Fatalf("unmarshal flushed %d: %v", i, err)
+		}
+		if env.FromAddress != "pinch:alice@localhost" {
+			t.Fatalf("flushed message %d: expected from alice, got %s", i, env.FromAddress)
+		}
+	}
+}
+
+func TestFlushBeforeRealTime(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, mq := newTestServerWithMQ(t, ctx, 1000)
+
+	// Connect alice.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+
+	// Send 2 messages to offline bob.
+	for i := 0; i < 2; i++ {
+		msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+		writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+		err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+		writeCancel()
+		if err != nil {
+			t.Fatalf("write queued %d: %v", i, err)
+		}
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	if mq.Count("pinch:bob@localhost") != 2 {
+		t.Fatalf("expected 2 queued, got %d", mq.Count("pinch:bob@localhost"))
+	}
+
+	// Bob connects -- triggers flush.
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Immediately send a real-time message from alice while bob is flushing.
+	// This should be enqueued to bbolt (not delivered directly) to preserve ordering.
+	rtMsg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, rtMsg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write real-time: %v", err)
+	}
+
+	// Read QueueStatus first.
+	readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+	_, data, err := bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read QueueStatus: %v", err)
+	}
+	var qsEnv pinchv1.Envelope
+	if err := proto.Unmarshal(data, &qsEnv); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if qsEnv.Type != pinchv1.MessageType_MESSAGE_TYPE_QUEUE_STATUS {
+		t.Fatalf("expected QUEUE_STATUS, got %v", qsEnv.Type)
+	}
+
+	// Read the 2 queued messages.
+	for i := 0; i < 2; i++ {
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		_, _, err := bobConn.Read(readCtx)
+		readCancel()
+		if err != nil {
+			t.Fatalf("bob read queued %d: %v", i, err)
+		}
+	}
+
+	// After flush completes, bob should eventually receive the real-time message
+	// (it was enqueued during flush, so the flush goroutine may pick it up in the next
+	// batch, or it arrives after flush completes). Either way, bob gets it.
+	// Give a moment for the flush to complete and the message to arrive.
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify the real-time message was queued (not dropped).
+	// It may have been flushed already or still in the queue.
+	// Try to read it from the WebSocket.
+	readCtx, readCancel = context.WithTimeout(ctx, 3*time.Second)
+	_, data, err = bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read real-time message: %v", err)
+	}
+	var rtEnv pinchv1.Envelope
+	if err := proto.Unmarshal(data, &rtEnv); err != nil {
+		t.Fatalf("unmarshal real-time: %v", err)
+	}
+	if rtEnv.FromAddress != "pinch:alice@localhost" {
+		t.Fatalf("expected real-time from alice, got %s", rtEnv.FromAddress)
 	}
 }
 

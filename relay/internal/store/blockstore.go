@@ -14,20 +14,15 @@ type BlockStore struct {
 	db *bolt.DB
 }
 
-// NewBlockStore opens a bbolt database at path with 0600 permissions
-// and creates the "blocks" bucket if it does not exist.
-func NewBlockStore(path string) (*BlockStore, error) {
-	db, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		return nil, err
-	}
-	// Create the blocks bucket on init.
-	err = db.Update(func(tx *bolt.Tx) error {
+// NewBlockStore creates a BlockStore using a shared bbolt database handle.
+// The "blocks" bucket is created if it does not exist. The caller is
+// responsible for closing the database (BlockStore does not own the handle).
+func NewBlockStore(db *bolt.DB) (*BlockStore, error) {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(blocksBucket)
 		return err
 	})
 	if err != nil {
-		db.Close()
 		return nil, err
 	}
 	return &BlockStore{db: db}, nil
@@ -66,7 +61,3 @@ func (s *BlockStore) IsBlocked(blockerAddr, senderAddr string) bool {
 	return blocked
 }
 
-// Close closes the underlying bbolt database.
-func (s *BlockStore) Close() error {
-	return s.db.Close()
-}

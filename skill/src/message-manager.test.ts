@@ -5,6 +5,8 @@ import {
 	EncryptedPayloadSchema,
 	PlaintextPayloadSchema,
 	DeliveryConfirmSchema,
+	QueueStatusSchema,
+	QueueFullSchema,
 	MessageType,
 } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
@@ -17,8 +19,8 @@ import { ensureSodiumReady, encrypt, ed25519PubToX25519, ed25519PrivToX25519 } f
 import { signDeliveryConfirmation } from "./delivery.js";
 import { MessageStore } from "./message-store.js";
 import { ConnectionStore } from "./connection-store.js";
-import { InboundRouter } from "./inbound-router.js";
 import { MessageManager } from "./message-manager.js";
+import type { EnforcementPipeline } from "./autonomy/enforcement-pipeline.js";
 import type { RelayClient } from "./relay-client.js";
 
 /** Create a mock RelayClient that tracks sent envelopes and supports multiple handlers. */
@@ -60,7 +62,7 @@ describe("MessageManager", () => {
 	let tempDir: string;
 	let messageStore: MessageStore;
 	let connectionStore: ConnectionStore;
-	let inboundRouter: InboundRouter;
+	let mockEnforcementPipeline: EnforcementPipeline;
 	let mockRelay: ReturnType<typeof createMockRelayClient>;
 	let manager: MessageManager;
 
@@ -84,13 +86,23 @@ describe("MessageManager", () => {
 		mockRelay = createMockRelayClient(
 			"pinch:alice@localhost",
 		) as any;
-		inboundRouter = new InboundRouter(connectionStore, messageStore);
+		mockEnforcementPipeline = {
+			async process(message, connectionAddress) {
+				return {
+					messageId: message.id,
+					senderAddress: connectionAddress,
+					body: message.body,
+					priority: message.priority,
+					state: "escalated_to_human",
+				};
+			},
+		} as unknown as EnforcementPipeline;
 		manager = new MessageManager(
 			mockRelay as unknown as RelayClient,
 			connectionStore,
 			messageStore,
 			aliceKeypair,
-			inboundRouter,
+			mockEnforcementPipeline,
 		);
 		await manager.init();
 	});
@@ -409,6 +421,112 @@ describe("MessageManager", () => {
 			// Warning should have been logged
 			expect(warnSpy).toHaveBeenCalledWith(
 				expect.stringContaining("Invalid delivery confirmation"),
+			);
+			warnSpy.mockRestore();
+		});
+	});
+
+	describe("store-and-forward envelope handling", () => {
+		it("handles delivery confirmation with was_stored flag", async () => {
+			// Send a message from Alice so there's a stored outbound message
+			const messageId = await manager.sendMessage({
+				recipient: "pinch:bob@localhost",
+				body: "Hello Bob",
+			});
+
+			// Simulate Bob sending back a delivery confirmation with was_stored=true
+			const messageIdBytes = new TextEncoder().encode(messageId);
+			const timestamp = BigInt(Date.now());
+			const signature = await signDeliveryConfirmation(
+				messageIdBytes,
+				timestamp,
+				bobKeypair.privateKey,
+			);
+
+			const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+			const confirmEnvelope = create(EnvelopeSchema, {
+				version: 1,
+				fromAddress: "pinch:bob@localhost",
+				toAddress: "pinch:alice@localhost",
+				type: MessageType.DELIVERY_CONFIRM,
+				timestamp,
+				payload: {
+					case: "deliveryConfirm",
+					value: create(DeliveryConfirmSchema, {
+						messageId: messageIdBytes,
+						signature,
+						timestamp,
+						state: "delivered",
+						wasStored: true,
+					}),
+				},
+			});
+
+			await manager.handleDeliveryConfirmation(confirmEnvelope);
+
+			// State should be updated to delivered
+			const stored = messageStore.getMessage(messageId);
+			expect(stored!.state).toBe("delivered");
+
+			// Should have logged the stored delivery
+			expect(logSpy).toHaveBeenCalledWith(
+				expect.stringContaining(`Delivery confirmed for ${messageId} (stored: true)`),
+			);
+			logSpy.mockRestore();
+		});
+
+		it("handles QueueStatus envelope", () => {
+			manager.setupHandlers();
+
+			const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+			const queueStatusEnv = create(EnvelopeSchema, {
+				version: 1,
+				type: MessageType.QUEUE_STATUS,
+				payload: {
+					case: "queueStatus",
+					value: create(QueueStatusSchema, {
+						pendingCount: 5,
+					}),
+				},
+			});
+
+			// Dispatch to handlers
+			for (const handler of (mockRelay as any).envelopeHandlers) {
+				handler(queueStatusEnv);
+			}
+
+			expect(logSpy).toHaveBeenCalledWith(
+				"Relay reports 5 queued messages pending flush",
+			);
+			logSpy.mockRestore();
+		});
+
+		it("handles QueueFull envelope", () => {
+			manager.setupHandlers();
+
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			const queueFullEnv = create(EnvelopeSchema, {
+				version: 1,
+				type: MessageType.QUEUE_FULL,
+				payload: {
+					case: "queueFull",
+					value: create(QueueFullSchema, {
+						recipientAddress: "pinch:bob@localhost",
+						reason: "recipient message queue is full (limit: 1000)",
+					}),
+				},
+			});
+
+			// Dispatch to handlers
+			for (const handler of (mockRelay as any).envelopeHandlers) {
+				handler(queueFullEnv);
+			}
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				"Message to pinch:bob@localhost not queued: recipient message queue is full (limit: 1000)",
 			);
 			warnSpy.mockRestore();
 		});

@@ -71,6 +71,7 @@ export async function run(args: string[]): Promise<void> {
 		priority: m.priority,
 		sequence: m.sequence,
 		state: m.state,
+		attribution: m.attribution ?? null,
 		createdAt: m.createdAt,
 		updatedAt: m.updatedAt,
 	}));

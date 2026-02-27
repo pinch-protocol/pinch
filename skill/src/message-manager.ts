@@ -26,7 +26,7 @@ import type { RelayClient } from "./relay-client.js";
 import type { ConnectionStore } from "./connection-store.js";
 import type { MessageStore, MessageRecord } from "./message-store.js";
 import type { Keypair } from "./identity.js";
-import type { InboundRouter } from "./inbound-router.js";
+import type { EnforcementPipeline } from "./autonomy/enforcement-pipeline.js";
 
 /** Maximum serialized envelope size (conservative limit below relay's 64KB). */
 const MAX_ENVELOPE_SIZE = 60 * 1024;
@@ -38,6 +38,7 @@ export interface SendMessageParams {
 	threadId?: string;
 	replyTo?: string;
 	priority?: "low" | "normal" | "urgent";
+	attribution?: "agent" | "human";
 }
 
 /**
@@ -50,7 +51,7 @@ export class MessageManager {
 		private connectionStore: ConnectionStore,
 		private messageStore: MessageStore,
 		private keypair: Keypair,
-		private inboundRouter: InboundRouter,
+		private enforcementPipeline: EnforcementPipeline,
 	) {}
 
 	/**
@@ -99,13 +100,18 @@ export class MessageManager {
 		// 5. Get next sequence number
 		const sequence = this.messageStore.nextSequence(recipient);
 
-		// 6-7. Build and serialize PlaintextPayload
+		// 6-7. Build and serialize PlaintextPayload with attribution wrapper
+		const attribution = params.attribution ?? "agent";
+		const wrappedContent = JSON.stringify({
+			text: body,
+			attribution,
+		});
 		const plaintext = create(PlaintextPayloadSchema, {
 			version: 1,
 			sequence: BigInt(sequence),
 			timestamp: BigInt(Date.now()),
-			content: new TextEncoder().encode(body),
-			contentType: "text/plain",
+			content: new TextEncoder().encode(wrappedContent),
+			contentType: "application/x-pinch+json",
 		});
 		const plaintextBytes = toBinary(PlaintextPayloadSchema, plaintext);
 
@@ -161,6 +167,7 @@ export class MessageManager {
 			priority,
 			sequence,
 			state: "sent",
+			attribution: params.attribution ?? "agent",
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -205,8 +212,20 @@ export class MessageManager {
 		// 7. Deserialize PlaintextPayload
 		const plaintextPayload = fromBinary(PlaintextPayloadSchema, decryptedBytes);
 
-		// 8. Extract text body
-		const body = new TextDecoder().decode(plaintextPayload.content);
+		// 8. Extract text body with attribution detection
+		const rawBody = new TextDecoder().decode(plaintextPayload.content);
+		let body = rawBody;
+		let inboundAttribution: "agent" | "human" = "agent";
+		if (plaintextPayload.contentType === "application/x-pinch+json") {
+			try {
+				const parsed = JSON.parse(rawBody);
+				body = parsed.text ?? rawBody;
+				inboundAttribution = parsed.attribution ?? "agent";
+			} catch {
+				// Not valid JSON -- use raw body
+				body = rawBody;
+			}
+		}
 
 		// 9. Derive messageId
 		const messageId = new TextDecoder().decode(envelope.messageId);
@@ -221,14 +240,14 @@ export class MessageManager {
 			sequence: Number(plaintextPayload.sequence),
 			state: "delivered",
 			priority: "normal",
+			attribution: inboundAttribution,
 			createdAt: now,
 			updatedAt: now,
 		};
 		this.messageStore.saveMessage(messageRecord);
 
-		// 11. Route via InboundRouter
-		const connection = this.connectionStore.getConnection(senderAddress);
-		this.inboundRouter.route(messageRecord, senderAddress);
+		// 11. Route via EnforcementPipeline
+		await this.enforcementPipeline.process(messageRecord, senderAddress);
 
 		// 12. Send delivery confirmation
 		await this.sendDeliveryConfirmation(messageId, senderAddress);
@@ -315,6 +334,9 @@ export class MessageManager {
 		// 6-7. Update state or log warning
 		if (valid) {
 			this.messageStore.updateState(messageId, confirm.state);
+			if (confirm.wasStored) {
+				console.log(`Delivery confirmed for ${messageId} (stored: true)`);
+			}
 		} else {
 			console.warn(
 				`Invalid delivery confirmation signature for message ${messageId}`,
@@ -338,7 +360,48 @@ export class MessageManager {
 				case MessageType.DELIVERY_CONFIRM:
 					this.handleDeliveryConfirmation(envelope);
 					break;
+				case MessageType.QUEUE_STATUS:
+					this.handleQueueStatus(envelope);
+					break;
+				case MessageType.QUEUE_FULL:
+					this.handleQueueFull(envelope);
+					break;
+				case MessageType.RATE_LIMITED:
+					this.handleRateLimited(envelope);
+					break;
 			}
 		});
+	}
+
+	/**
+	 * Handle a QueueStatus envelope from the relay indicating pending
+	 * queued messages before a flush begins.
+	 */
+	private handleQueueStatus(envelope: Envelope): void {
+		if (envelope.payload.case !== "queueStatus") return;
+		const pendingCount = envelope.payload.value.pendingCount;
+		console.log(`Relay reports ${pendingCount} queued messages pending flush`);
+	}
+
+	/**
+	 * Handle a RateLimited envelope from the relay indicating the sender
+	 * has exceeded the per-connection rate limit.
+	 */
+	private handleRateLimited(envelope: Envelope): void {
+		if (envelope.payload.case !== "rateLimited") return;
+		const { retryAfterMs, reason } = envelope.payload.value;
+		console.warn(
+			`Rate limited by relay: ${reason}. Retry after ${retryAfterMs}ms`,
+		);
+	}
+
+	/**
+	 * Handle a QueueFull envelope from the relay indicating the recipient's
+	 * message queue has reached capacity.
+	 */
+	private handleQueueFull(envelope: Envelope): void {
+		if (envelope.payload.case !== "queueFull") return;
+		const { recipientAddress, reason } = envelope.payload.value;
+		console.warn(`Message to ${recipientAddress} not queued: ${reason}`);
 	}
 }

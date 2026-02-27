@@ -10,11 +10,15 @@ import (
 func newTestBlockStore(t *testing.T) *store.BlockStore {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test-blocks.db")
-	bs, err := store.NewBlockStore(path)
+	db, err := store.OpenDB(path)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 	return bs
 }
 
@@ -91,23 +95,32 @@ func TestPersistenceAcrossReopen(t *testing.T) {
 	path := filepath.Join(dir, "persist-test.db")
 
 	// Open, block, close.
-	bs1, err := store.NewBlockStore(path)
+	db1, err := store.OpenDB(path)
+	if err != nil {
+		t.Fatalf("OpenDB 1: %v", err)
+	}
+	bs1, err := store.NewBlockStore(db1)
 	if err != nil {
 		t.Fatalf("NewBlockStore 1: %v", err)
 	}
 	if err := bs1.Block("alice", "bob"); err != nil {
 		t.Fatalf("Block: %v", err)
 	}
-	if err := bs1.Close(); err != nil {
+	if err := db1.Close(); err != nil {
 		t.Fatalf("Close 1: %v", err)
 	}
 
 	// Reopen and verify block survives.
-	bs2, err := store.NewBlockStore(path)
+	db2, err := store.OpenDB(path)
+	if err != nil {
+		t.Fatalf("OpenDB 2: %v", err)
+	}
+	defer db2.Close()
+
+	bs2, err := store.NewBlockStore(db2)
 	if err != nil {
 		t.Fatalf("NewBlockStore 2: %v", err)
 	}
-	defer bs2.Close()
 
 	if !bs2.IsBlocked("alice", "bob") {
 		t.Fatal("expected block to persist across DB close/reopen")

@@ -21,24 +21,14 @@ const (
 	// to prevent abuse.
 	maxEnvelopeSize = 65536
 
-	// pendingTTL is how long messages are buffered for offline recipients
-	// before being dropped.
-	pendingTTL = 30 * time.Second
+	// flushBatchSize is the number of queued messages sent per batch
+	// during reconnect flush.
+	flushBatchSize = 50
 
-	// pendingCleanupInterval is how often the cleanup goroutine sweeps
-	// expired pending messages.
-	pendingCleanupInterval = 10 * time.Second
-
-	// maxPendingPerAddress is the maximum number of pending messages held
-	// per recipient address to prevent memory abuse.
-	maxPendingPerAddress = 100
+	// flushBatchDelay is the pause between flush batches to avoid
+	// overwhelming the client's receive buffer.
+	flushBatchDelay = 10 * time.Millisecond
 )
-
-// pendingMsg holds a message buffered for an offline recipient.
-type pendingMsg struct {
-	data     []byte
-	deadline time.Time
-}
 
 // Hub maintains the set of active clients and routes messages between them.
 // A single Hub goroutine serializes access to the routing table via channels.
@@ -56,23 +46,30 @@ type Hub struct {
 	// don't need blocking.
 	blockStore *store.BlockStore
 
-	// pendingMessages holds messages for offline recipients, keyed by
-	// recipient address. Protected by mu.
-	pendingMessages map[string][]pendingMsg
+	// mq is the durable message queue for offline recipients. Can be nil
+	// for tests that don't need store-and-forward.
+	mq *store.MessageQueue
 
-	// mu protects external reads of the routing table and pendingMessages.
+	// rateLimiter enforces per-connection token bucket rate limiting.
+	// Can be nil to disable rate limiting (e.g., tests).
+	rateLimiter *RateLimiter
+
+	// mu protects external reads of the routing table.
 	mu sync.RWMutex
 }
 
 // NewHub creates a new Hub with initialized channels and routing table.
 // blockStore may be nil if block enforcement is not needed (e.g., tests).
-func NewHub(blockStore *store.BlockStore) *Hub {
+// mq may be nil if store-and-forward is not needed (e.g., tests).
+// rl may be nil to disable rate limiting (e.g., tests).
+func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue, rl *RateLimiter) *Hub {
 	return &Hub{
-		clients:         make(map[string]*Client),
-		register:        make(chan *Client),
-		unregister:      make(chan *Client),
-		blockStore:      blockStore,
-		pendingMessages: make(map[string][]pendingMsg),
+		clients:     make(map[string]*Client),
+		register:    make(chan *Client),
+		unregister:  make(chan *Client),
+		blockStore:  blockStore,
+		mq:          mq,
+		rateLimiter: rl,
 	}
 }
 
@@ -80,25 +77,24 @@ func NewHub(blockStore *store.BlockStore) *Hub {
 // events until the context is cancelled. Run should be called in its own
 // goroutine.
 func (h *Hub) Run(ctx context.Context) {
-	cleanupTicker := time.NewTicker(pendingCleanupInterval)
-	defer cleanupTicker.Stop()
-
 	for {
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client.address] = client
-			// Flush any pending messages for the newly registered address.
-			if pending, ok := h.pendingMessages[client.address]; ok {
-				now := time.Now()
-				for _, pm := range pending {
-					if now.Before(pm.deadline) {
-						client.Send(pm.data)
-					}
-				}
-				delete(h.pendingMessages, client.address)
-			}
 			h.mu.Unlock()
+
+			// Check for queued messages and start flush if needed.
+			if h.mq != nil {
+				count := h.mq.Count(client.address)
+				if count > 0 {
+					// Send QueueStatus to inform the client of pending messages.
+					h.sendQueueStatus(client, int32(count))
+					client.SetFlushing(true)
+					go h.flushQueuedMessages(client)
+				}
+			}
+
 			slog.Info("client registered",
 				"address", client.address,
 				"connections", h.ClientCount(),
@@ -112,30 +108,13 @@ func (h *Hub) Run(ctx context.Context) {
 				client.cancel()
 			}
 			h.mu.Unlock()
+			if h.rateLimiter != nil {
+				h.rateLimiter.Remove(client.address)
+			}
 			slog.Info("client unregistered",
 				"address", client.address,
 				"connections", h.ClientCount(),
 			)
-
-		case <-cleanupTicker.C:
-			h.mu.Lock()
-			now := time.Now()
-			for addr, msgs := range h.pendingMessages {
-				// Filter out expired messages in-place.
-				n := 0
-				for _, pm := range msgs {
-					if now.Before(pm.deadline) {
-						msgs[n] = pm
-						n++
-					}
-				}
-				if n == 0 {
-					delete(h.pendingMessages, addr)
-				} else {
-					h.pendingMessages[addr] = msgs[:n]
-				}
-			}
-			h.mu.Unlock()
 
 		case <-ctx.Done():
 			h.mu.Lock()
@@ -148,6 +127,81 @@ func (h *Hub) Run(ctx context.Context) {
 			slog.Info("hub stopped")
 			return
 		}
+	}
+}
+
+// sendQueueStatus sends a QueueStatus envelope to the client informing
+// it of the number of pending queued messages.
+func (h *Hub) sendQueueStatus(client *Client, pendingCount int32) {
+	env := &pinchv1.Envelope{
+		Version: 1,
+		Type:    pinchv1.MessageType_MESSAGE_TYPE_QUEUE_STATUS,
+		Payload: &pinchv1.Envelope_QueueStatus{
+			QueueStatus: &pinchv1.QueueStatus{
+				PendingCount: pendingCount,
+			},
+		},
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		slog.Error("failed to marshal QueueStatus", "error", err)
+		return
+	}
+	client.Send(data)
+}
+
+// flushQueuedMessages drains all queued messages for the client in batches.
+// After flush completes, the client's flushing flag is cleared and real-time
+// traffic can resume. If the client disconnects during flush, remaining
+// messages stay in bbolt for the next reconnect.
+//
+// Each entry is deleted from bbolt immediately after being sent to the client's
+// send buffer. This prevents duplicate delivery when the flush loop re-reads
+// the queue. Messages that arrive DURING flush (enqueued by RouteMessage) will
+// be picked up in subsequent FlushBatch calls.
+func (h *Hub) flushQueuedMessages(client *Client) {
+	defer client.SetFlushing(false)
+
+	for {
+		// Check if client disconnected.
+		if client.ctx.Err() != nil {
+			slog.Info("flush aborted: client disconnected",
+				"address", client.address,
+			)
+			return
+		}
+
+		entries, err := h.mq.FlushBatch(client.address, flushBatchSize)
+		if err != nil {
+			slog.Error("flush batch error",
+				"address", client.address,
+				"error", err,
+			)
+			return
+		}
+
+		if len(entries) == 0 {
+			// All queued messages have been sent.
+			slog.Info("flush complete",
+				"address", client.address,
+			)
+			return
+		}
+
+		for _, entry := range entries {
+			client.Send(entry.Envelope)
+			// Delete entry from bbolt immediately after queuing to send buffer.
+			// This prevents duplicate delivery on the next FlushBatch call.
+			if err := h.mq.Remove(client.address, entry.Key); err != nil {
+				slog.Error("failed to remove flushed entry",
+					"address", client.address,
+					"error", err,
+				)
+			}
+		}
+
+		// Small delay between batches to avoid overwhelming the client.
+		time.Sleep(flushBatchDelay)
 	}
 }
 
@@ -184,6 +238,12 @@ func (h *Hub) Unregister(client *Client) {
 // Blocked and undeliverable messages are silently dropped.
 // Envelopes exceeding 64KB are silently dropped.
 func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
+	// Enforce per-connection rate limit.
+	if h.rateLimiter != nil && !h.rateLimiter.Allow(from.Address()) {
+		h.sendRateLimited(from)
+		return nil
+	}
+
 	// Enforce maximum envelope size.
 	if len(envelope) > maxEnvelopeSize {
 		slog.Debug("route: envelope exceeds max size",
@@ -244,16 +304,40 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 
 	recipient, ok := h.LookupClient(toAddress)
 	if !ok {
-		// Recipient offline -- buffer for transient reconnect.
-		h.mu.Lock()
-		pending := h.pendingMessages[toAddress]
-		if len(pending) < maxPendingPerAddress {
-			h.pendingMessages[toAddress] = append(pending, pendingMsg{
-				data:     envelope,
-				deadline: time.Now().Add(pendingTTL),
-			})
+		// Recipient offline -- enqueue to durable store.
+		if h.mq != nil {
+			err := h.mq.Enqueue(toAddress, from.Address(), envelope)
+			if err == store.ErrQueueFull {
+				h.sendQueueFull(from, toAddress)
+				slog.Info("queue full for recipient",
+					"from", from.Address(),
+					"to", toAddress,
+				)
+			} else if err != nil {
+				slog.Error("failed to enqueue message",
+					"from", from.Address(),
+					"to", toAddress,
+					"error", err,
+				)
+			}
 		}
-		h.mu.Unlock()
+		return nil
+	}
+
+	// If recipient is online but flushing, enqueue to preserve ordering.
+	if recipient.IsFlushing() {
+		if h.mq != nil {
+			err := h.mq.Enqueue(toAddress, from.Address(), envelope)
+			if err == store.ErrQueueFull {
+				h.sendQueueFull(from, toAddress)
+			} else if err != nil {
+				slog.Error("failed to enqueue message during flush",
+					"from", from.Address(),
+					"to", toAddress,
+					"error", err,
+				)
+			}
+		}
 		return nil
 	}
 
@@ -261,10 +345,42 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 	return nil
 }
 
-// PendingCount returns the number of pending messages for the given address.
-// This is primarily used for testing.
-func (h *Hub) PendingCount(address string) int {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return len(h.pendingMessages[address])
+// sendRateLimited sends a RateLimited error envelope to the sender.
+func (h *Hub) sendRateLimited(client *Client) {
+	env := &pinchv1.Envelope{
+		Version: 1,
+		Type:    pinchv1.MessageType_MESSAGE_TYPE_RATE_LIMITED,
+		Payload: &pinchv1.Envelope_RateLimited{
+			RateLimited: &pinchv1.RateLimited{
+				RetryAfterMs: 1000,
+				Reason:       "per-connection rate limit exceeded",
+			},
+		},
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		slog.Error("failed to marshal RateLimited", "error", err)
+		return
+	}
+	client.Send(data)
+}
+
+// sendQueueFull sends a QueueFull error envelope to the sender.
+func (h *Hub) sendQueueFull(sender *Client, recipientAddress string) {
+	env := &pinchv1.Envelope{
+		Version: 1,
+		Type:    pinchv1.MessageType_MESSAGE_TYPE_QUEUE_FULL,
+		Payload: &pinchv1.Envelope_QueueFull{
+			QueueFull: &pinchv1.QueueFull{
+				RecipientAddress: recipientAddress,
+				Reason:           "recipient message queue is full (limit: 1000)",
+			},
+		},
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		slog.Error("failed to marshal QueueFull", "error", err)
+		return
+	}
+	sender.Send(data)
 }

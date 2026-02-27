@@ -19,6 +19,11 @@ import { MessageStore } from "../message-store.js";
 import { ConnectionManager } from "../connection.js";
 import { MessageManager } from "../message-manager.js";
 import { InboundRouter } from "../inbound-router.js";
+import { ActivityFeed } from "../autonomy/activity-feed.js";
+import { PermissionsEnforcer } from "../autonomy/permissions-enforcer.js";
+import { NoOpPolicyEvaluator } from "../autonomy/policy-evaluator.js";
+import { CircuitBreaker } from "../autonomy/circuit-breaker.js";
+import { EnforcementPipeline } from "../autonomy/enforcement-pipeline.js";
 import type { Keypair } from "../identity.js";
 
 /** All initialized runtime components returned by bootstrap(). */
@@ -30,6 +35,10 @@ export interface BootstrapResult {
 	connectionManager: ConnectionManager;
 	messageManager: MessageManager;
 	inboundRouter: InboundRouter;
+	activityFeed: ActivityFeed;
+	permissionsEnforcer: PermissionsEnforcer;
+	circuitBreaker: CircuitBreaker;
+	enforcementPipeline: EnforcementPipeline;
 }
 
 let bootstrapped: BootstrapResult | null = null;
@@ -72,8 +81,27 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		join(dataDir, "connections.json"),
 	);
 	await connectionStore.load();
+
+	// Safety: clear any stuck passthrough flags from previous session.
+	// If the CLI disconnected while passthrough was active, messages would pile up
+	// in 'escalated_to_human' state indefinitely. Clearing on bootstrap prevents this.
+	await connectionStore.clearPassthroughFlags();
+
 	const messageStore = new MessageStore(join(dataDir, "messages.db"));
-	const inboundRouter = new InboundRouter(connectionStore, messageStore);
+	const activityFeed = new ActivityFeed(messageStore.getDb());
+	const policyEvaluator = new NoOpPolicyEvaluator();
+	const permissionsEnforcer = new PermissionsEnforcer(connectionStore, policyEvaluator);
+	const circuitBreaker = new CircuitBreaker(connectionStore, activityFeed);
+	const inboundRouter = new InboundRouter(connectionStore, messageStore, activityFeed);
+	const enforcementPipeline = new EnforcementPipeline(
+		permissionsEnforcer,
+		circuitBreaker,
+		inboundRouter,
+		policyEvaluator,
+		connectionStore,
+		messageStore,
+		activityFeed,
+	);
 	const connectionManager = new ConnectionManager(
 		relayClient,
 		connectionStore,
@@ -84,7 +112,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		connectionStore,
 		messageStore,
 		keypair,
-		inboundRouter,
+		enforcementPipeline,
 	);
 
 	// Connect to relay and set up handlers.
@@ -101,6 +129,10 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		connectionManager,
 		messageManager,
 		inboundRouter,
+		activityFeed,
+		permissionsEnforcer,
+		circuitBreaker,
+		enforcementPipeline,
 	};
 
 	return bootstrapped;
@@ -114,4 +146,79 @@ export async function shutdown(): Promise<void> {
 	bootstrapped.relayClient.disconnect();
 	bootstrapped.messageStore.close();
 	bootstrapped = null;
+}
+
+// ---------------------------------------------------------------------------
+// Local-only bootstrap (no relay connection)
+// ---------------------------------------------------------------------------
+
+/** Components returned by bootstrapLocal() -- local stores only, no relay. */
+export interface LocalBootstrapResult {
+	keypair: Keypair;
+	connectionStore: ConnectionStore;
+	messageStore: MessageStore;
+	activityFeed: ActivityFeed;
+}
+
+let localBootstrapped: LocalBootstrapResult | null = null;
+
+/**
+ * Initialize only local data stores (keypair, ConnectionStore, MessageStore,
+ * ActivityFeed) without connecting to a relay server.
+ *
+ * Use this for CLI tools that only need to read/write local data and do not
+ * require a WebSocket connection to the relay (e.g. pinch-permissions,
+ * pinch-audit-verify, pinch-audit-export).
+ *
+ * Environment variables:
+ * - PINCH_KEYPAIR_PATH: Path to keypair JSON file (default: ~/.pinch/keypair.json)
+ * - PINCH_DATA_DIR: Directory for SQLite and connection store (default: ~/.pinch/data)
+ *
+ * Does NOT read or require PINCH_RELAY_URL.
+ */
+export async function bootstrapLocal(): Promise<LocalBootstrapResult> {
+	if (localBootstrapped) return localBootstrapped;
+
+	const keypairPath =
+		process.env.PINCH_KEYPAIR_PATH ??
+		join(homedir(), ".pinch", "keypair.json");
+	const dataDir =
+		process.env.PINCH_DATA_DIR ?? join(homedir(), ".pinch", "data");
+
+	// Load or generate keypair.
+	let keypair: Keypair;
+	try {
+		keypair = await loadKeypair(keypairPath);
+	} catch {
+		keypair = await generateKeypair();
+		await saveKeypair(keypair, keypairPath);
+	}
+
+	// Create local stores only -- no relay, no managers, no enforcement.
+	const connectionStore = new ConnectionStore(
+		join(dataDir, "connections.json"),
+	);
+	await connectionStore.load();
+	await connectionStore.clearPassthroughFlags();
+
+	const messageStore = new MessageStore(join(dataDir, "messages.db"));
+	const activityFeed = new ActivityFeed(messageStore.getDb());
+
+	localBootstrapped = {
+		keypair,
+		connectionStore,
+		messageStore,
+		activityFeed,
+	};
+
+	return localBootstrapped;
+}
+
+/**
+ * Close local stores. Call after local-only tool completes.
+ */
+export async function shutdownLocal(): Promise<void> {
+	if (!localBootstrapped) return;
+	localBootstrapped.messageStore.close();
+	localBootstrapped = null;
 }
