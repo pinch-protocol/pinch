@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "bin": {
+    "pinch-send": "./dist/tools/pinch-send.js",
+    "pinch-connect": "./dist/tools/pinch-connect.js",
+    "pinch-contacts": "./dist/tools/pinch-contacts.js",
+    "pinch-history": "./dist/tools/pinch-history.js",
+    "pinch-status": "./dist/tools/pinch-status.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
