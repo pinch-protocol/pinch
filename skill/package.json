@@ -1,0 +1,20 @@
+{
+  "name": "@pinch/skill",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@pinch/proto": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@types/ws": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}
