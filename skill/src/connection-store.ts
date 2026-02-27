@@ -2,9 +2,9 @@
  * JSON-backed connection state persistence for the Pinch agent.
  *
  * Persists all connections with states: active, pending_outbound,
- * pending_inbound, blocked, revoked. Each connection has an autonomy
- * level (full_manual or full_auto) that controls message processing
- * behavior (enforcement deferred to Phase 3+).
+ * pending_inbound, blocked, revoked. Each connection has a 4-tier
+ * autonomy level (full_manual, notify, auto_respond, full_auto) that
+ * controls message processing behavior.
  *
  * New connections default to full_manual. Upgrading to full_auto
  * requires explicit confirmation (confirmed: true) -- the data-layer
@@ -24,7 +24,7 @@ export type ConnectionState =
 	| "revoked";
 
 /** Per-connection autonomy level controlling message processing. */
-export type AutonomyLevel = "full_manual" | "full_auto";
+export type AutonomyLevel = "full_manual" | "notify" | "auto_respond" | "full_auto";
 
 /** A single connection to a peer agent. */
 export interface Connection {
@@ -38,6 +38,10 @@ export interface Connection {
 	nickname: string;
 	/** Autonomy level for message processing. */
 	autonomyLevel: AutonomyLevel;
+	/** Free-text natural language policy for auto_respond evaluation. */
+	autoRespondPolicy?: string;
+	/** Whether the circuit breaker has been tripped (persists across restarts). */
+	circuitBreakerTripped?: boolean;
 	/** Free-text message from connection request (max 280 chars). */
 	shortMessage?: string;
 	/** ISO timestamp when connection was created. */
@@ -172,6 +176,8 @@ export class ConnectionStore {
 				| "autonomyLevel"
 				| "peerPublicKey"
 				| "lastActivity"
+				| "autoRespondPolicy"
+				| "circuitBreakerTripped"
 			>
 		>,
 	): Connection {
@@ -212,15 +218,20 @@ export class ConnectionStore {
 			throw new Error(`connection not found: ${peerAddress}`);
 		}
 
-		// Gate: upgrading to full_auto requires explicit confirmation.
+		// Gate: upgrading TO full_auto from any other level requires explicit confirmation.
 		if (
-			conn.autonomyLevel === "full_manual" &&
 			level === "full_auto" &&
+			conn.autonomyLevel !== "full_auto" &&
 			opts?.confirmed !== true
 		) {
 			throw new Error(
 				"Upgrading to Full Auto requires explicit confirmation",
 			);
+		}
+
+		// Clear circuit breaker flag -- human is manually overriding autonomy level.
+		if (conn.circuitBreakerTripped) {
+			conn.circuitBreakerTripped = false;
 		}
 
 		return this.updateConnection(peerAddress, { autonomyLevel: level });

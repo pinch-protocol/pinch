@@ -311,6 +311,150 @@ describe("ConnectionStore", () => {
 			});
 			expect(updated.autonomyLevel).toBe("full_auto");
 		});
+
+		it("allows setting notify level without confirmation", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:notify@localhost";
+			store.addConnection(
+				makeConnection({
+					peerAddress: addr,
+					autonomyLevel: "full_manual",
+				}),
+			);
+
+			const updated = store.setAutonomy(addr, "notify");
+			expect(updated.autonomyLevel).toBe("notify");
+		});
+
+		it("allows setting auto_respond level without confirmation", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:autorespond@localhost";
+			store.addConnection(
+				makeConnection({
+					peerAddress: addr,
+					autonomyLevel: "full_manual",
+				}),
+			);
+
+			const updated = store.setAutonomy(addr, "auto_respond");
+			expect(updated.autonomyLevel).toBe("auto_respond");
+		});
+
+		it("rejects notify to full_auto upgrade without confirmed: true", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:notify-to-auto@localhost";
+			store.addConnection(
+				makeConnection({
+					peerAddress: addr,
+					autonomyLevel: "notify",
+				}),
+			);
+
+			expect(() => store.setAutonomy(addr, "full_auto")).toThrow(
+				"Upgrading to Full Auto requires explicit confirmation",
+			);
+		});
+
+		it("allows notify to full_auto upgrade with confirmed: true", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:notify-confirm@localhost";
+			store.addConnection(
+				makeConnection({
+					peerAddress: addr,
+					autonomyLevel: "notify",
+				}),
+			);
+
+			const updated = store.setAutonomy(addr, "full_auto", {
+				confirmed: true,
+			});
+			expect(updated.autonomyLevel).toBe("full_auto");
+		});
+
+		it("allows full_auto to notify downgrade without confirmation", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:auto-to-notify@localhost";
+			store.addConnection(
+				makeConnection({
+					peerAddress: addr,
+					autonomyLevel: "full_auto",
+				}),
+			);
+
+			const updated = store.setAutonomy(addr, "notify");
+			expect(updated.autonomyLevel).toBe("notify");
+		});
+
+		it("clears circuitBreakerTripped on setAutonomy", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:tripped@localhost";
+			store.addConnection(
+				makeConnection({
+					peerAddress: addr,
+					autonomyLevel: "full_manual",
+				}),
+			);
+
+			// Manually set circuit breaker as tripped
+			store.updateConnection(addr, { circuitBreakerTripped: true });
+			const before = store.getConnection(addr);
+			expect(before?.circuitBreakerTripped).toBe(true);
+
+			// setAutonomy should clear it
+			store.setAutonomy(addr, "notify");
+			const after = store.getConnection(addr);
+			expect(after?.circuitBreakerTripped).toBe(false);
+		});
+	});
+
+	describe("autoRespondPolicy", () => {
+		it("stores and retrieves autoRespondPolicy", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:policy@localhost";
+			store.addConnection(makeConnection({ peerAddress: addr }));
+
+			store.updateConnection(addr, {
+				autoRespondPolicy: "Only respond to scheduling requests",
+			});
+			const conn = store.getConnection(addr);
+			expect(conn?.autoRespondPolicy).toBe(
+				"Only respond to scheduling requests",
+			);
+		});
+
+		it("persists autoRespondPolicy through save/load roundtrip", async () => {
+			const store = new ConnectionStore(storePath);
+			await store.load();
+
+			const addr = "pinch:policy-persist@localhost";
+			store.addConnection(makeConnection({ peerAddress: addr }));
+			store.updateConnection(addr, {
+				autoRespondPolicy: "Respond to meeting invites only",
+			});
+
+			await store.save();
+
+			const store2 = new ConnectionStore(storePath);
+			await store2.load();
+			const loaded = store2.getConnection(addr);
+			expect(loaded?.autoRespondPolicy).toBe(
+				"Respond to meeting invites only",
+			);
+		});
 	});
 
 	describe("save/load roundtrip", () => {
