@@ -335,9 +335,9 @@ Enter or exit human passthrough mode for a connection, or send a human-attribute
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `--start --connection` | Conditional | Enter passthrough mode (human takes over) |
-| `--stop --connection` | Conditional | Exit passthrough mode (hand back to agent) |
-| `--send --connection --body` | Conditional | Send a message attributed to the human |
+| `--start`, `--connection` | Conditional | Enter passthrough mode (human takes over) |
+| `--stop`, `--connection` | Conditional | Exit passthrough mode (hand back to agent) |
+| `--send`, `--connection`, `--body` | Conditional | Send a message attributed to the human |
 
 ```bash
 pinch-intervene --start --connection "pinch:abc123@relay.example.com"
