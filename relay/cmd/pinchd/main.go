@@ -41,12 +41,26 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	blockStore, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
 	if err != nil {
-		slog.Error("failed to open block store", "path", dbPath, "error", err)
+		slog.Error("failed to open database", "path", dbPath, "error", err)
 		os.Exit(1)
 	}
-	defer blockStore.Close()
+	defer db.Close()
+
+	blockStore, err := store.NewBlockStore(db)
+	if err != nil {
+		slog.Error("failed to initialize block store", "error", err)
+		os.Exit(1)
+	}
+
+	mq, err := store.NewMessageQueue(db, 1000, 7*24*time.Hour)
+	if err != nil {
+		slog.Error("failed to initialize message queue", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("message queue ready", "maxPerAgent", 1000, "ttl", "7d")
+	_ = mq // Used in Plan 02 when hub integration is wired up
 
 	h := hub.NewHub(blockStore)
 	go h.Run(ctx)

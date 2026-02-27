@@ -19,6 +19,8 @@ enum MessageType {
   MESSAGE_TYPE_CONNECTION_REVOKE = 10;
   MESSAGE_TYPE_BLOCK_NOTIFICATION = 11;
   MESSAGE_TYPE_UNBLOCK_NOTIFICATION = 12;
+  MESSAGE_TYPE_QUEUE_STATUS = 13;
+  MESSAGE_TYPE_QUEUE_FULL = 14;
 }
 
 // Envelope is the outer wire message. The relay can read this for routing
@@ -44,6 +46,8 @@ message Envelope {
     BlockNotification block_notification = 19;
     UnblockNotification unblock_notification = 20;
     DeliveryConfirm delivery_confirm = 21;
+    QueueStatus queue_status = 22;
+    QueueFull queue_full = 23;
   }
 }
 
@@ -139,4 +143,18 @@ message DeliveryConfirm {
   bytes signature = 2;    // Ed25519 detached signature of (message_id || timestamp)
   int64 timestamp = 3;    // confirmation timestamp
   string state = 4;       // delivery state (e.g., "delivered", "read_by_agent", "escalated_to_human")
+  bool was_stored = 5;    // true if the message was queued (store-and-forward) and delivered later
+}
+
+// QueueStatus is sent by the relay to inform the agent of pending
+// queued messages before starting a flush.
+message QueueStatus {
+  int32 pending_count = 1;
+}
+
+// QueueFull is sent to the sender when the recipient's message queue
+// has reached its capacity and cannot accept more messages.
+message QueueFull {
+  string recipient_address = 1;
+  string reason = 2;
 }

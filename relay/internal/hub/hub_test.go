@@ -347,11 +347,15 @@ func newTestServerWithBlockStore(t *testing.T, ctx context.Context) (*httptest.S
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "test-blocks.db")
-	bs, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 
 	h := hub.NewHub(bs)
 	go h.Run(ctx)
@@ -719,11 +723,15 @@ func newAuthTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hu
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "test-auth-blocks.db")
-	bs, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 
 	h := hub.NewHub(bs)
 	go h.Run(ctx)
@@ -982,11 +990,15 @@ func TestAuthHandshakeTimeout(t *testing.T) {
 
 	// Create a server with a very short auth timeout.
 	dbPath := filepath.Join(t.TempDir(), "test-timeout-blocks.db")
-	bs, err := store.NewBlockStore(dbPath)
+	db, err := store.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	bs, err := store.NewBlockStore(db)
 	if err != nil {
 		t.Fatalf("NewBlockStore: %v", err)
 	}
-	t.Cleanup(func() { bs.Close() })
 
 	h := hub.NewHub(bs)
 	go h.Run(ctx)

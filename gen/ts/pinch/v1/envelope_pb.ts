@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file pinch/v1/envelope.proto.
  */
 export const file_pinch_v1_envelope: GenFile = /*@__PURE__*/
-  fileDesc("ChdwaW5jaC92MS9lbnZlbG9wZS5wcm90bxIIcGluY2gudjEilAYKCEVudmVsb3BlEg8KB3ZlcnNpb24YASABKA0SFAoMZnJvbV9hZGRyZXNzGAIgASgJEhIKCnRvX2FkZHJlc3MYAyABKAkSIwoEdHlwZRgEIAEoDjIVLnBpbmNoLnYxLk1lc3NhZ2VUeXBlEhIKCm1lc3NhZ2VfaWQYBSABKAwSEQoJdGltZXN0YW1wGAYgASgDEi8KCWVuY3J5cHRlZBgKIAEoCzIaLnBpbmNoLnYxLkVuY3J5cHRlZFBheWxvYWRIABIoCgloYW5kc2hha2UYCyABKAsyEy5waW5jaC52MS5IYW5kc2hha2VIABIoCgloZWFydGJlYXQYDCABKAsyEy5waW5jaC52MS5IZWFydGJlYXRIABIxCg5hdXRoX2NoYWxsZW5nZRgNIAEoCzIXLnBpbmNoLnYxLkF1dGhDaGFsbGVuZ2VIABIvCg1hdXRoX3Jlc3BvbnNlGA4gASgLMhYucGluY2gudjEuQXV0aFJlc3BvbnNlSAASKwoLYXV0aF9yZXN1bHQYDyABKAsyFC5waW5jaC52MS5BdXRoUmVzdWx0SAASOQoSY29ubmVjdGlvbl9yZXF1ZXN0GBAgASgLMhsucGluY2gudjEuQ29ubmVjdGlvblJlcXVlc3RIABI7ChNjb25uZWN0aW9uX3Jlc3BvbnNlGBEgASgLMhwucGluY2gudjEuQ29ubmVjdGlvblJlc3BvbnNlSAASNwoRY29ubmVjdGlvbl9yZXZva2UYEiABKAsyGi5waW5jaC52MS5Db25uZWN0aW9uUmV2b2tlSAASOQoSYmxvY2tfbm90aWZpY2F0aW9uGBMgASgLMhsucGluY2gudjEuQmxvY2tOb3RpZmljYXRpb25IABI9ChR1bmJsb2NrX25vdGlmaWNhdGlvbhgUIAEoCzIdLnBpbmNoLnYxLlVuYmxvY2tOb3RpZmljYXRpb25IABI1ChBkZWxpdmVyeV9jb25maXJtGBUgASgLMhkucGluY2gudjEuRGVsaXZlcnlDb25maXJtSABCCQoHcGF5bG9hZCJQChBFbmNyeXB0ZWRQYXlsb2FkEg0KBW5vbmNlGAEgASgMEhIKCmNpcGhlcnRleHQYAiABKAwSGQoRc2VuZGVyX3B1YmxpY19rZXkYAyABKAwibwoQUGxhaW50ZXh0UGF5bG9hZBIPCgd2ZXJzaW9uGAEgASgNEhAKCHNlcXVlbmNlGAIgASgEEhEKCXRpbWVzdGFtcBgDIAEoAxIPCgdjb250ZW50GAQgASgMEhQKDGNvbnRlbnRfdHlwZRgFIAEoCSJJCglIYW5kc2hha2USDwoHdmVyc2lvbhgBIAEoDRITCgtzaWduaW5nX2tleRgCIAEoDBIWCg5lbmNyeXB0aW9uX2tleRgDIAEoDCIeCglIZWFydGJlYXQSEQoJdGltZXN0YW1wGAEgASgDIjEKDUF1dGhDaGFsbGVuZ2USDQoFbm9uY2UYASABKAwSEQoJdGltZXN0YW1wGAIgASgDIjUKDEF1dGhSZXNwb25zZRIRCglzaWduYXR1cmUYASABKAwSEgoKcHVibGljX2tleRgCIAEoDCJOCgpBdXRoUmVzdWx0Eg8KB3N1Y2Nlc3MYASABKAgSFQoNZXJyb3JfbWVzc2FnZRgCIAEoCRIYChBhc3NpZ25lZF9hZGRyZXNzGAMgASgJIn0KEUNvbm5lY3Rpb25SZXF1ZXN0EhQKDGZyb21fYWRkcmVzcxgBIAEoCRISCgp0b19hZGRyZXNzGAIgASgJEg8KB21lc3NhZ2UYAyABKAkSGQoRc2VuZGVyX3B1YmxpY19rZXkYBCABKAwSEgoKZXhwaXJlc19hdBgFIAEoAyJuChJDb25uZWN0aW9uUmVzcG9uc2USFAoMZnJvbV9hZGRyZXNzGAEgASgJEhIKCnRvX2FkZHJlc3MYAiABKAkSEAoIYWNjZXB0ZWQYAyABKAgSHAoUcmVzcG9uZGVyX3B1YmxpY19rZXkYBCABKAwiPAoQQ29ubmVjdGlvblJldm9rZRIUCgxmcm9tX2FkZHJlc3MYASABKAkSEgoKdG9fYWRkcmVzcxgCIAEoCSJFChFCbG9ja05vdGlmaWNhdGlvbhIXCg9ibG9ja2VyX2FkZHJlc3MYASABKAkSFwoPYmxvY2tlZF9hZGRyZXNzGAIgASgJIksKE1VuYmxvY2tOb3RpZmljYXRpb24SGQoRdW5ibG9ja2VyX2FkZHJlc3MYASABKAkSGQoRdW5ibG9ja2VkX2FkZHJlc3MYAiABKAkiWgoPRGVsaXZlcnlDb25maXJtEhIKCm1lc3NhZ2VfaWQYASABKAwSEQoJc2lnbmF0dXJlGAIgASgMEhEKCXRpbWVzdGFtcBgDIAEoAxINCgVzdGF0ZRgEIAEoCSq6AwoLTWVzc2FnZVR5cGUSHAoYTUVTU0FHRV9UWVBFX1VOU1BFQ0lGSUVEEAASGgoWTUVTU0FHRV9UWVBFX0hBTkRTSEFLRRABEh8KG01FU1NBR0VfVFlQRV9BVVRIX0NIQUxMRU5HRRACEh4KGk1FU1NBR0VfVFlQRV9BVVRIX1JFU1BPTlNFEAMSGAoUTUVTU0FHRV9UWVBFX01FU1NBR0UQBBIhCh1NRVNTQUdFX1RZUEVfREVMSVZFUllfQ09ORklSTRAFEiMKH01FU1NBR0VfVFlQRV9DT05ORUNUSU9OX1JFUVVFU1QQBhIkCiBNRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVNQT05TRRAHEhoKFk1FU1NBR0VfVFlQRV9IRUFSVEJFQVQQCBIcChhNRVNTQUdFX1RZUEVfQVVUSF9SRVNVTFQQCRIiCh5NRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVZPS0UQChIjCh9NRVNTQUdFX1RZUEVfQkxPQ0tfTk9USUZJQ0FUSU9OEAsSJQohTUVTU0FHRV9UWVBFX1VOQkxPQ0tfTk9USUZJQ0FUSU9OEAxClwEKDGNvbS5waW5jaC52MUINRW52ZWxvcGVQcm90b1ABWjdnaXRodWIuY29tL3BpbmNoLXByb3RvY29sL3BpbmNoL2dlbi9nby9waW5jaC92MTtwaW5jaHYxogIDUFhYqgIIUGluY2guVjHKAghQaW5jaFxWMeICFFBpbmNoXFYxXEdQQk1ldGFkYXRh6gIJUGluY2g6OlYxYgZwcm90bzM");
+  fileDesc("ChdwaW5jaC92MS9lbnZlbG9wZS5wcm90bxIIcGluY2gudjEi7gYKCEVudmVsb3BlEg8KB3ZlcnNpb24YASABKA0SFAoMZnJvbV9hZGRyZXNzGAIgASgJEhIKCnRvX2FkZHJlc3MYAyABKAkSIwoEdHlwZRgEIAEoDjIVLnBpbmNoLnYxLk1lc3NhZ2VUeXBlEhIKCm1lc3NhZ2VfaWQYBSABKAwSEQoJdGltZXN0YW1wGAYgASgDEi8KCWVuY3J5cHRlZBgKIAEoCzIaLnBpbmNoLnYxLkVuY3J5cHRlZFBheWxvYWRIABIoCgloYW5kc2hha2UYCyABKAsyEy5waW5jaC52MS5IYW5kc2hha2VIABIoCgloZWFydGJlYXQYDCABKAsyEy5waW5jaC52MS5IZWFydGJlYXRIABIxCg5hdXRoX2NoYWxsZW5nZRgNIAEoCzIXLnBpbmNoLnYxLkF1dGhDaGFsbGVuZ2VIABIvCg1hdXRoX3Jlc3BvbnNlGA4gASgLMhYucGluY2gudjEuQXV0aFJlc3BvbnNlSAASKwoLYXV0aF9yZXN1bHQYDyABKAsyFC5waW5jaC52MS5BdXRoUmVzdWx0SAASOQoSY29ubmVjdGlvbl9yZXF1ZXN0GBAgASgLMhsucGluY2gudjEuQ29ubmVjdGlvblJlcXVlc3RIABI7ChNjb25uZWN0aW9uX3Jlc3BvbnNlGBEgASgLMhwucGluY2gudjEuQ29ubmVjdGlvblJlc3BvbnNlSAASNwoRY29ubmVjdGlvbl9yZXZva2UYEiABKAsyGi5waW5jaC52MS5Db25uZWN0aW9uUmV2b2tlSAASOQoSYmxvY2tfbm90aWZpY2F0aW9uGBMgASgLMhsucGluY2gudjEuQmxvY2tOb3RpZmljYXRpb25IABI9ChR1bmJsb2NrX25vdGlmaWNhdGlvbhgUIAEoCzIdLnBpbmNoLnYxLlVuYmxvY2tOb3RpZmljYXRpb25IABI1ChBkZWxpdmVyeV9jb25maXJtGBUgASgLMhkucGluY2gudjEuRGVsaXZlcnlDb25maXJtSAASLQoMcXVldWVfc3RhdHVzGBYgASgLMhUucGluY2gudjEuUXVldWVTdGF0dXNIABIpCgpxdWV1ZV9mdWxsGBcgASgLMhMucGluY2gudjEuUXVldWVGdWxsSABCCQoHcGF5bG9hZCJQChBFbmNyeXB0ZWRQYXlsb2FkEg0KBW5vbmNlGAEgASgMEhIKCmNpcGhlcnRleHQYAiABKAwSGQoRc2VuZGVyX3B1YmxpY19rZXkYAyABKAwibwoQUGxhaW50ZXh0UGF5bG9hZBIPCgd2ZXJzaW9uGAEgASgNEhAKCHNlcXVlbmNlGAIgASgEEhEKCXRpbWVzdGFtcBgDIAEoAxIPCgdjb250ZW50GAQgASgMEhQKDGNvbnRlbnRfdHlwZRgFIAEoCSJJCglIYW5kc2hha2USDwoHdmVyc2lvbhgBIAEoDRITCgtzaWduaW5nX2tleRgCIAEoDBIWCg5lbmNyeXB0aW9uX2tleRgDIAEoDCIeCglIZWFydGJlYXQSEQoJdGltZXN0YW1wGAEgASgDIjEKDUF1dGhDaGFsbGVuZ2USDQoFbm9uY2UYASABKAwSEQoJdGltZXN0YW1wGAIgASgDIjUKDEF1dGhSZXNwb25zZRIRCglzaWduYXR1cmUYASABKAwSEgoKcHVibGljX2tleRgCIAEoDCJOCgpBdXRoUmVzdWx0Eg8KB3N1Y2Nlc3MYASABKAgSFQoNZXJyb3JfbWVzc2FnZRgCIAEoCRIYChBhc3NpZ25lZF9hZGRyZXNzGAMgASgJIn0KEUNvbm5lY3Rpb25SZXF1ZXN0EhQKDGZyb21fYWRkcmVzcxgBIAEoCRISCgp0b19hZGRyZXNzGAIgASgJEg8KB21lc3NhZ2UYAyABKAkSGQoRc2VuZGVyX3B1YmxpY19rZXkYBCABKAwSEgoKZXhwaXJlc19hdBgFIAEoAyJuChJDb25uZWN0aW9uUmVzcG9uc2USFAoMZnJvbV9hZGRyZXNzGAEgASgJEhIKCnRvX2FkZHJlc3MYAiABKAkSEAoIYWNjZXB0ZWQYAyABKAgSHAoUcmVzcG9uZGVyX3B1YmxpY19rZXkYBCABKAwiPAoQQ29ubmVjdGlvblJldm9rZRIUCgxmcm9tX2FkZHJlc3MYASABKAkSEgoKdG9fYWRkcmVzcxgCIAEoCSJFChFCbG9ja05vdGlmaWNhdGlvbhIXCg9ibG9ja2VyX2FkZHJlc3MYASABKAkSFwoPYmxvY2tlZF9hZGRyZXNzGAIgASgJIksKE1VuYmxvY2tOb3RpZmljYXRpb24SGQoRdW5ibG9ja2VyX2FkZHJlc3MYASABKAkSGQoRdW5ibG9ja2VkX2FkZHJlc3MYAiABKAkibgoPRGVsaXZlcnlDb25maXJtEhIKCm1lc3NhZ2VfaWQYASABKAwSEQoJc2lnbmF0dXJlGAIgASgMEhEKCXRpbWVzdGFtcBgDIAEoAxINCgVzdGF0ZRgEIAEoCRISCgp3YXNfc3RvcmVkGAUgASgIIiQKC1F1ZXVlU3RhdHVzEhUKDXBlbmRpbmdfY291bnQYASABKAUiNgoJUXVldWVGdWxsEhkKEXJlY2lwaWVudF9hZGRyZXNzGAEgASgJEg4KBnJlYXNvbhgCIAEoCSr2AwoLTWVzc2FnZVR5cGUSHAoYTUVTU0FHRV9UWVBFX1VOU1BFQ0lGSUVEEAASGgoWTUVTU0FHRV9UWVBFX0hBTkRTSEFLRRABEh8KG01FU1NBR0VfVFlQRV9BVVRIX0NIQUxMRU5HRRACEh4KGk1FU1NBR0VfVFlQRV9BVVRIX1JFU1BPTlNFEAMSGAoUTUVTU0FHRV9UWVBFX01FU1NBR0UQBBIhCh1NRVNTQUdFX1RZUEVfREVMSVZFUllfQ09ORklSTRAFEiMKH01FU1NBR0VfVFlQRV9DT05ORUNUSU9OX1JFUVVFU1QQBhIkCiBNRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVNQT05TRRAHEhoKFk1FU1NBR0VfVFlQRV9IRUFSVEJFQVQQCBIcChhNRVNTQUdFX1RZUEVfQVVUSF9SRVNVTFQQCRIiCh5NRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVZPS0UQChIjCh9NRVNTQUdFX1RZUEVfQkxPQ0tfTk9USUZJQ0FUSU9OEAsSJQohTUVTU0FHRV9UWVBFX1VOQkxPQ0tfTk9USUZJQ0FUSU9OEAwSHQoZTUVTU0FHRV9UWVBFX1FVRVVFX1NUQVRVUxANEhsKF01FU1NBR0VfVFlQRV9RVUVVRV9GVUxMEA5ClwEKDGNvbS5waW5jaC52MUINRW52ZWxvcGVQcm90b1ABWjdnaXRodWIuY29tL3BpbmNoLXByb3RvY29sL3BpbmNoL2dlbi9nby9waW5jaC92MTtwaW5jaHYxogIDUFhYqgIIUGluY2guVjHKAghQaW5jaFxWMeICFFBpbmNoXFYxXEdQQk1ldGFkYXRh6gIJUGluY2g6OlYxYgZwcm90bzM");
 
 /**
  * Envelope is the outer wire message. The relay can read this for routing
@@ -124,6 +124,18 @@ export type Envelope = Message<"pinch.v1.Envelope"> & {
      */
     value: DeliveryConfirm;
     case: "deliveryConfirm";
+  } | {
+    /**
+     * @generated from field: pinch.v1.QueueStatus queue_status = 22;
+     */
+    value: QueueStatus;
+    case: "queueStatus";
+  } | {
+    /**
+     * @generated from field: pinch.v1.QueueFull queue_full = 23;
+     */
+    value: QueueFull;
+    case: "queueFull";
   } | { case: undefined; value?: undefined };
 };
 
@@ -527,6 +539,13 @@ export type DeliveryConfirm = Message<"pinch.v1.DeliveryConfirm"> & {
    * @generated from field: string state = 4;
    */
   state: string;
+
+  /**
+   * true if the message was queued (store-and-forward) and delivered later
+   *
+   * @generated from field: bool was_stored = 5;
+   */
+  wasStored: boolean;
 };
 
 /**
@@ -535,6 +554,51 @@ export type DeliveryConfirm = Message<"pinch.v1.DeliveryConfirm"> & {
  */
 export const DeliveryConfirmSchema: GenMessage<DeliveryConfirm> = /*@__PURE__*/
   messageDesc(file_pinch_v1_envelope, 13);
+
+/**
+ * QueueStatus is sent by the relay to inform the agent of pending
+ * queued messages before starting a flush.
+ *
+ * @generated from message pinch.v1.QueueStatus
+ */
+export type QueueStatus = Message<"pinch.v1.QueueStatus"> & {
+  /**
+   * @generated from field: int32 pending_count = 1;
+   */
+  pendingCount: number;
+};
+
+/**
+ * Describes the message pinch.v1.QueueStatus.
+ * Use `create(QueueStatusSchema)` to create a new message.
+ */
+export const QueueStatusSchema: GenMessage<QueueStatus> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 14);
+
+/**
+ * QueueFull is sent to the sender when the recipient's message queue
+ * has reached its capacity and cannot accept more messages.
+ *
+ * @generated from message pinch.v1.QueueFull
+ */
+export type QueueFull = Message<"pinch.v1.QueueFull"> & {
+  /**
+   * @generated from field: string recipient_address = 1;
+   */
+  recipientAddress: string;
+
+  /**
+   * @generated from field: string reason = 2;
+   */
+  reason: string;
+};
+
+/**
+ * Describes the message pinch.v1.QueueFull.
+ * Use `create(QueueFullSchema)` to create a new message.
+ */
+export const QueueFullSchema: GenMessage<QueueFull> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 15);
 
 /**
  * MessageType enumerates all wire message types.
@@ -606,6 +670,16 @@ export enum MessageType {
    * @generated from enum value: MESSAGE_TYPE_UNBLOCK_NOTIFICATION = 12;
    */
   UNBLOCK_NOTIFICATION = 12,
+
+  /**
+   * @generated from enum value: MESSAGE_TYPE_QUEUE_STATUS = 13;
+   */
+  QUEUE_STATUS = 13,
+
+  /**
+   * @generated from enum value: MESSAGE_TYPE_QUEUE_FULL = 14;
+   */
+  QUEUE_FULL = 14,
 }
 
 /**
