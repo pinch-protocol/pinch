@@ -231,10 +231,6 @@ func sendAuthResult(conn *websocket.Conn, success bool, assignedAddress, errorMe
 // including goroutine count and active connection count.
 func healthHandler(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !isLoopbackRemoteAddr(r.RemoteAddr) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
 		status := map[string]int{
 			"goroutines":  runtime.NumGoroutine(),
 			"connections": h.ClientCount(),
