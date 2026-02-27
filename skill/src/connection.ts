@@ -24,6 +24,7 @@ import {
 import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { RelayClient } from "./relay-client.js";
 import type { ConnectionStore } from "./connection-store.js";
+import type { Keypair } from "./identity.js";
 
 /** Maximum length for connection request messages. */
 const MAX_MESSAGE_LENGTH = 280;
@@ -40,6 +41,7 @@ export class ConnectionManager {
 	constructor(
 		private relayClient: RelayClient,
 		private connectionStore: ConnectionStore,
+		private keypair?: Keypair,
 	) {}
 
 	/**
@@ -78,7 +80,7 @@ export class ConnectionManager {
 					fromAddress: ownAddress,
 					toAddress,
 					message,
-					senderPublicKey: new Uint8Array(0), // Pubkey is available via auth; relay knows the sender
+					senderPublicKey: this.keypair?.publicKey ?? new Uint8Array(0),
 					expiresAt,
 				}),
 			},
@@ -164,7 +166,7 @@ export class ConnectionManager {
 					fromAddress: ownAddress,
 					toAddress: peerAddress,
 					accepted: true,
-					responderPublicKey: new Uint8Array(0), // Pubkey exchange via auth; relay verifies identity
+					responderPublicKey: this.keypair?.publicKey ?? new Uint8Array(0),
 				}),
 			},
 		});

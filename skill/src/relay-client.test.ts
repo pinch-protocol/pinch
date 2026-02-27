@@ -4,6 +4,12 @@ import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
+import {
+	EnvelopeSchema,
+	MessageType,
+} from "@pinch/proto/pinch/v1/envelope_pb.js";
+import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import { RelayClient } from "./relay-client.js";
 import { generateKeypair } from "./identity.js";
 import type { Keypair } from "./identity.js";
@@ -209,5 +215,52 @@ describe("RelayClient with auth handshake", () => {
 		await waitForConnections(0);
 
 		expect(addr1).toBe(addr2);
+	});
+
+	it("multiple onEnvelope handlers all receive the same envelope", async () => {
+		const kpSender = await generateKeypair();
+		const kpReceiver = await generateKeypair();
+
+		const sender = new RelayClient(RELAY_URL, kpSender, RELAY_HOST);
+		const receiver = new RelayClient(RELAY_URL, kpReceiver, RELAY_HOST);
+
+		await sender.connect();
+		await receiver.connect();
+		await waitForConnections(2);
+
+		// Register two envelope handlers on receiver
+		const received1: Envelope[] = [];
+		const received2: Envelope[] = [];
+
+		receiver.onEnvelope((env) => {
+			received1.push(env);
+		});
+		receiver.onEnvelope((env) => {
+			received2.push(env);
+		});
+
+		// Sender sends a heartbeat envelope to receiver
+		const envelope = create(EnvelopeSchema, {
+			version: 1,
+			fromAddress: sender.assignedAddress!,
+			toAddress: receiver.assignedAddress!,
+			type: MessageType.HEARTBEAT,
+			timestamp: BigInt(Date.now()),
+		});
+		const data = toBinary(EnvelopeSchema, envelope);
+		sender.sendEnvelope(data);
+
+		// Wait for delivery
+		await new Promise((r) => setTimeout(r, 500));
+
+		// Both handlers should have received the envelope
+		expect(received1).toHaveLength(1);
+		expect(received2).toHaveLength(1);
+		expect(received1[0].type).toBe(MessageType.HEARTBEAT);
+		expect(received2[0].type).toBe(MessageType.HEARTBEAT);
+
+		sender.disconnect();
+		receiver.disconnect();
+		await waitForConnections(0);
 	});
 });

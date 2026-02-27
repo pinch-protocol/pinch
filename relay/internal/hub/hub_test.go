@@ -1201,3 +1201,269 @@ func TestAuthBlockEnforcementViaNotification(t *testing.T) {
 		t.Fatal("expected bob to NOT receive message from blocked alice")
 	}
 }
+
+// --- 64KB size enforcement and transient buffer tests ---
+
+func TestMaxEnvelopeSizeDrop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+
+	// Connect alice and bob.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Create an envelope that exceeds 64KB when serialized.
+	bigPayload := make([]byte, 70000)
+	for i := range bigPayload {
+		bigPayload[i] = 0xAB
+	}
+	env := &pinchv1.Envelope{
+		Version:     1,
+		FromAddress: "pinch:alice@localhost",
+		ToAddress:   "pinch:bob@localhost",
+		Type:        pinchv1.MessageType_MESSAGE_TYPE_MESSAGE,
+		Payload: &pinchv1.Envelope_Encrypted{
+			Encrypted: &pinchv1.EncryptedPayload{
+				Ciphertext: bigPayload,
+			},
+		},
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+	if len(data) <= 65536 {
+		t.Fatalf("expected envelope > 64KB, got %d bytes", len(data))
+	}
+
+	// Alice sends the oversized envelope.
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, data)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Bob should NOT receive the message (silently dropped due to size).
+	readCtx, readCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	_, _, err = bobConn.Read(readCtx)
+	readCancel()
+	if err == nil {
+		t.Fatal("expected bob to NOT receive oversized message")
+	}
+
+	// Both clients should remain connected.
+	if h.ClientCount() != 2 {
+		t.Fatal("expected both clients to remain connected after oversized drop")
+	}
+}
+
+func TestPendingMessageDeliveredOnReconnect(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+
+	// Connect only alice -- bob is offline.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+
+	// Alice sends a message to offline bob.
+	msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Give time for routing.
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify message is pending.
+	if h.PendingCount("pinch:bob@localhost") != 1 {
+		t.Fatalf("expected 1 pending message, got %d", h.PendingCount("pinch:bob@localhost"))
+	}
+
+	// Now bob connects -- should receive the buffered message.
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Bob should receive the pending message.
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	_, data, err := bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read: %v", err)
+	}
+
+	var received pinchv1.Envelope
+	if err := proto.Unmarshal(data, &received); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if received.FromAddress != "pinch:alice@localhost" {
+		t.Fatalf("expected from alice, got %s", received.FromAddress)
+	}
+
+	// Pending messages should be cleared.
+	if h.PendingCount("pinch:bob@localhost") != 0 {
+		t.Fatalf("expected 0 pending messages after flush, got %d", h.PendingCount("pinch:bob@localhost"))
+	}
+}
+
+func TestPendingMessageExpires(t *testing.T) {
+	// This test uses the hub directly (not WebSocket) to avoid needing
+	// to actually wait 30 seconds. We manually insert a pending message
+	// with an expired deadline and verify the cleanup goroutine removes it.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	h := hub.NewHub(nil)
+	go h.Run(ctx)
+
+	// Use the hub's RouteMessage with a mock client to enqueue a message.
+	// First we need a "sender" client registered so RouteMessage can work.
+	// We use a nil conn client for unit-level testing by directly manipulating
+	// pending state via RouteMessage.
+
+	// Create a simple envelope addressed to an offline recipient.
+	env := &pinchv1.Envelope{
+		Version:     1,
+		FromAddress: "pinch:sender@localhost",
+		ToAddress:   "pinch:offline@localhost",
+		Type:        pinchv1.MessageType_MESSAGE_TYPE_MESSAGE,
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+
+	// Create a minimal sender client for RouteMessage.
+	senderConn, err := dialWSForHub(ctx, t, h, "pinch:sender@localhost")
+	if err != nil {
+		t.Fatalf("create sender: %v", err)
+	}
+	defer senderConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+
+	// Send message to offline recipient -- should be buffered.
+	senderClient, ok := h.LookupClient("pinch:sender@localhost")
+	if !ok {
+		t.Fatal("sender not found")
+	}
+	if err := h.RouteMessage(senderClient, data); err != nil {
+		t.Fatalf("RouteMessage: %v", err)
+	}
+
+	// Verify message is pending.
+	if h.PendingCount("pinch:offline@localhost") != 1 {
+		t.Fatalf("expected 1 pending, got %d", h.PendingCount("pinch:offline@localhost"))
+	}
+
+	// Wait for cleanup + TTL to expire.
+	// The cleanup runs every 10s and messages expire after 30s.
+	// We need to wait past the TTL plus a full cleanup interval to ensure
+	// the expired message is swept. 45s accounts for timing variance.
+	// NOTE: This is a slow test (~45s). In production we'd inject the clock.
+	// For CI, we accept the cost since it validates critical behavior.
+	t.Log("waiting for pending message to expire (45 seconds)...")
+	time.Sleep(45 * time.Second)
+
+	// Verify the pending message was cleaned up.
+	if h.PendingCount("pinch:offline@localhost") != 0 {
+		t.Fatalf("expected 0 pending after expiry, got %d", h.PendingCount("pinch:offline@localhost"))
+	}
+}
+
+func TestPendingCapPerAddress(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+
+	// Connect alice.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+
+	// Send 110 messages to offline bob -- only 100 should be buffered.
+	for i := 0; i < 110; i++ {
+		msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+		writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+		err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+		writeCancel()
+		if err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+
+	// Give time for all messages to be routed.
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify cap.
+	count := h.PendingCount("pinch:bob@localhost")
+	if count != 100 {
+		t.Fatalf("expected 100 pending messages (cap), got %d", count)
+	}
+}
+
+// dialWSForHub is a helper that creates a test server for a hub and dials a WebSocket.
+// This is used when we need to interact with a specific hub instance directly.
+func dialWSForHub(ctx context.Context, t *testing.T, h *hub.Hub, address string) (*websocket.Conn, error) {
+	t.Helper()
+
+	r := chi.NewRouter()
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		addr := r.URL.Query().Get("address")
+		if addr == "" {
+			http.Error(w, "missing address", http.StatusBadRequest)
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Logf("websocket accept error: %v", err)
+			return
+		}
+		client := hub.NewClient(h, conn, addr, nil, ctx)
+		h.Register(client)
+		go client.ReadPump()
+		go client.WritePump()
+		go client.HeartbeatLoop()
+	})
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(func() { srv.Close() })
+
+	conn, _, err := websocket.Dial(ctx, wsURL(srv, address), nil)
+	return conn, err
+}

@@ -13,6 +13,7 @@
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { validateAddress } from "./identity.js";
 
 /** Connection lifecycle states. */
 export type ConnectionState =
@@ -223,6 +224,33 @@ export class ConnectionStore {
 		}
 
 		return this.updateConnection(peerAddress, { autonomyLevel: level });
+	}
+
+	/**
+	 * Get the peer's Ed25519 public key as raw bytes.
+	 *
+	 * Resolution order:
+	 * 1. If peerPublicKey is stored and non-empty, decode from base64.
+	 * 2. Fall back to extracting from the pinch address using validateAddress()
+	 *    (the address embeds the public key in its base58 payload).
+	 *
+	 * @returns 32-byte Ed25519 public key or null if unavailable.
+	 */
+	getPeerPublicKey(peerAddress: string): Uint8Array | null {
+		const conn = this.data.connections[peerAddress];
+
+		// Try stored base64-encoded key first.
+		if (conn?.peerPublicKey && conn.peerPublicKey.length > 0) {
+			return Uint8Array.from(Buffer.from(conn.peerPublicKey, "base64"));
+		}
+
+		// Fall back to extracting from pinch address.
+		try {
+			const { pubKey } = validateAddress(peerAddress);
+			return pubKey;
+		} catch {
+			return null;
+		}
 	}
 
 	/**

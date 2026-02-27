@@ -43,6 +43,7 @@ message Envelope {
     ConnectionRevoke connection_revoke = 18;
     BlockNotification block_notification = 19;
     UnblockNotification unblock_notification = 20;
+    DeliveryConfirm delivery_confirm = 21;
   }
 }
 
@@ -129,4 +130,13 @@ message BlockNotification {
 message UnblockNotification {
   string unblocker_address = 1;
   string unblocked_address = 2;
+}
+
+// DeliveryConfirm is an E2E signed delivery receipt sent by the recipient
+// back to the sender to confirm message delivery.
+message DeliveryConfirm {
+  bytes message_id = 1;   // ID of the message being confirmed
+  bytes signature = 2;    // Ed25519 detached signature of (message_id || timestamp)
+  int64 timestamp = 3;    // confirmation timestamp
+  string state = 4;       // delivery state (e.g., "delivered", "read_by_agent", "escalated_to_human")
 }

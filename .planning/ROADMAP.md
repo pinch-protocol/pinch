@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation and Crypto Primitives** - Monorepo scaffold, protobuf wire format, Ed25519 identity, relay WebSocket skeleton, cross-language crypto tests (completed 2026-02-27)
 - [x] **Phase 2: Authentication and Connection** - Challenge-response auth, connection request lifecycle, blocking, baseline autonomy (Full Manual + Full Auto) (completed 2026-02-27)
-- [ ] **Phase 3: Encrypted 1:1 Messaging** - NaCl box E2E encryption, real-time message delivery, OpenClaw skill integration
+- [x] **Phase 3: Encrypted 1:1 Messaging** - NaCl box E2E encryption, real-time message delivery, OpenClaw skill integration (completed 2026-02-27)
 - [ ] **Phase 4: Store-and-Forward** - bbolt message queue at relay, TTL expiration, reconnect flush, delivery confirmations
 - [ ] **Phase 5: Full Autonomy and Permissions** - 4-tier autonomy state machine, inbound permissions manifest, autonomy change controls
 - [ ] **Phase 6: Oversight and Safety** - Activity feed, human intervention, audit log with hash chaining, rate limiting, circuit breakers, muting
@@ -65,11 +65,13 @@ Plans:
   3. Sender receives an E2E signed delivery confirmation when the recipient receives the message
   4. The OpenClaw SKILL.md definition exists with proper YAML frontmatter; the skill maintains a persistent WebSocket connection via heartbeat cycle; outbound tools (pinch_send, pinch_connect, pinch_history) follow OpenClaw patterns
   5. Inbound messages are routed based on connection autonomy level -- Full Manual queues for human approval, Full Auto processes immediately
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- DeliveryConfirm proto schema, relay 64KB enforcement, 30-second transient buffer
+- [ ] 03-02-PLAN.md -- SQLite message store, delivery confirmation signing, public key exchange fix
+- [ ] 03-03-PLAN.md -- MessageManager encrypt/decrypt orchestration, InboundRouter, RelayClient reconnection
+- [ ] 03-04-PLAN.md -- Five OpenClaw skill tools, SKILL.md, HEARTBEAT.md, integration tests
 
 ### Phase 4: Store-and-Forward
 **Goal**: Agents that go offline receive all messages sent while they were away, in order, when they reconnect
@@ -123,7 +125,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation and Crypto Primitives | 3/3 | Complete    | 2026-02-27 |
 | 2. Authentication and Connection | 4/4 | Complete    | 2026-02-27 |
-| 3. Encrypted 1:1 Messaging | 0/2 | Not started | - |
+| 3. Encrypted 1:1 Messaging | 1/4 | Complete    | 2026-02-27 |
 | 4. Store-and-Forward | 0/1 | Not started | - |
 | 5. Full Autonomy and Permissions | 0/2 | Not started | - |
 | 6. Oversight and Safety | 0/2 | Not started | - |

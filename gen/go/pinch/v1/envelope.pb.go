@@ -124,6 +124,7 @@ type Envelope struct {
 	//	*Envelope_ConnectionRevoke
 	//	*Envelope_BlockNotification
 	//	*Envelope_UnblockNotification
+	//	*Envelope_DeliveryConfirm
 	Payload       isEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -307,6 +308,15 @@ func (x *Envelope) GetUnblockNotification() *UnblockNotification {
 	return nil
 }
 
+func (x *Envelope) GetDeliveryConfirm() *DeliveryConfirm {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_DeliveryConfirm); ok {
+			return x.DeliveryConfirm
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Payload interface {
 	isEnvelope_Payload()
 }
@@ -355,6 +365,10 @@ type Envelope_UnblockNotification struct {
 	UnblockNotification *UnblockNotification `protobuf:"bytes,20,opt,name=unblock_notification,json=unblockNotification,proto3,oneof"`
 }
 
+type Envelope_DeliveryConfirm struct {
+	DeliveryConfirm *DeliveryConfirm `protobuf:"bytes,21,opt,name=delivery_confirm,json=deliveryConfirm,proto3,oneof"`
+}
+
 func (*Envelope_Encrypted) isEnvelope_Payload() {}
 
 func (*Envelope_Handshake) isEnvelope_Payload() {}
@@ -376,6 +390,8 @@ func (*Envelope_ConnectionRevoke) isEnvelope_Payload() {}
 func (*Envelope_BlockNotification) isEnvelope_Payload() {}
 
 func (*Envelope_UnblockNotification) isEnvelope_Payload() {}
+
+func (*Envelope_DeliveryConfirm) isEnvelope_Payload() {}
 
 // EncryptedPayload is an opaque encrypted blob. The relay cannot read this.
 type EncryptedPayload struct {
@@ -1096,11 +1112,81 @@ func (x *UnblockNotification) GetUnblockedAddress() string {
 	return ""
 }
 
+// DeliveryConfirm is an E2E signed delivery receipt sent by the recipient
+// back to the sender to confirm message delivery.
+type DeliveryConfirm struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     []byte                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"` // ID of the message being confirmed
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`                  // Ed25519 detached signature of (message_id || timestamp)
+	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                 // confirmation timestamp
+	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                          // delivery state (e.g., "delivered", "read_by_agent", "escalated_to_human")
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeliveryConfirm) Reset() {
+	*x = DeliveryConfirm{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeliveryConfirm) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeliveryConfirm) ProtoMessage() {}
+
+func (x *DeliveryConfirm) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeliveryConfirm.ProtoReflect.Descriptor instead.
+func (*DeliveryConfirm) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DeliveryConfirm) GetMessageId() []byte {
+	if x != nil {
+		return x.MessageId
+	}
+	return nil
+}
+
+func (x *DeliveryConfirm) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *DeliveryConfirm) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *DeliveryConfirm) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 var File_pinch_v1_envelope_proto protoreflect.FileDescriptor
 
 const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x17pinch/v1/envelope.proto\x12\bpinch.v1\"\xc5\a\n" +
+	"\x17pinch/v1/envelope.proto\x12\bpinch.v1\"\x8d\b\n" +
 	"\bEnvelope\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\rR\aversion\x12!\n" +
 	"\ffrom_address\x18\x02 \x01(\tR\vfromAddress\x12\x1d\n" +
@@ -1122,7 +1208,8 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\x13connection_response\x18\x11 \x01(\v2\x1c.pinch.v1.ConnectionResponseH\x00R\x12connectionResponse\x12I\n" +
 	"\x11connection_revoke\x18\x12 \x01(\v2\x1a.pinch.v1.ConnectionRevokeH\x00R\x10connectionRevoke\x12L\n" +
 	"\x12block_notification\x18\x13 \x01(\v2\x1b.pinch.v1.BlockNotificationH\x00R\x11blockNotification\x12R\n" +
-	"\x14unblock_notification\x18\x14 \x01(\v2\x1d.pinch.v1.UnblockNotificationH\x00R\x13unblockNotificationB\t\n" +
+	"\x14unblock_notification\x18\x14 \x01(\v2\x1d.pinch.v1.UnblockNotificationH\x00R\x13unblockNotification\x12F\n" +
+	"\x10delivery_confirm\x18\x15 \x01(\v2\x19.pinch.v1.DeliveryConfirmH\x00R\x0fdeliveryConfirmB\t\n" +
 	"\apayload\"t\n" +
 	"\x10EncryptedPayload\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12\x1e\n" +
@@ -1178,7 +1265,13 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\x0fblocked_address\x18\x02 \x01(\tR\x0eblockedAddress\"o\n" +
 	"\x13UnblockNotification\x12+\n" +
 	"\x11unblocker_address\x18\x01 \x01(\tR\x10unblockerAddress\x12+\n" +
-	"\x11unblocked_address\x18\x02 \x01(\tR\x10unblockedAddress*\xba\x03\n" +
+	"\x11unblocked_address\x18\x02 \x01(\tR\x10unblockedAddress\"\x82\x01\n" +
+	"\x0fDeliveryConfirm\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\fR\tmessageId\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state*\xba\x03\n" +
 	"\vMessageType\x12\x1c\n" +
 	"\x18MESSAGE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16MESSAGE_TYPE_HANDSHAKE\x10\x01\x12\x1f\n" +
@@ -1209,7 +1302,7 @@ func file_pinch_v1_envelope_proto_rawDescGZIP() []byte {
 }
 
 var file_pinch_v1_envelope_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pinch_v1_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_pinch_v1_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_pinch_v1_envelope_proto_goTypes = []any{
 	(MessageType)(0),            // 0: pinch.v1.MessageType
 	(*Envelope)(nil),            // 1: pinch.v1.Envelope
@@ -1225,6 +1318,7 @@ var file_pinch_v1_envelope_proto_goTypes = []any{
 	(*ConnectionRevoke)(nil),    // 11: pinch.v1.ConnectionRevoke
 	(*BlockNotification)(nil),   // 12: pinch.v1.BlockNotification
 	(*UnblockNotification)(nil), // 13: pinch.v1.UnblockNotification
+	(*DeliveryConfirm)(nil),     // 14: pinch.v1.DeliveryConfirm
 }
 var file_pinch_v1_envelope_proto_depIdxs = []int32{
 	0,  // 0: pinch.v1.Envelope.type:type_name -> pinch.v1.MessageType
@@ -1239,11 +1333,12 @@ var file_pinch_v1_envelope_proto_depIdxs = []int32{
 	11, // 9: pinch.v1.Envelope.connection_revoke:type_name -> pinch.v1.ConnectionRevoke
 	12, // 10: pinch.v1.Envelope.block_notification:type_name -> pinch.v1.BlockNotification
 	13, // 11: pinch.v1.Envelope.unblock_notification:type_name -> pinch.v1.UnblockNotification
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	14, // 12: pinch.v1.Envelope.delivery_confirm:type_name -> pinch.v1.DeliveryConfirm
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_pinch_v1_envelope_proto_init() }
@@ -1263,6 +1358,7 @@ func file_pinch_v1_envelope_proto_init() {
 		(*Envelope_ConnectionRevoke)(nil),
 		(*Envelope_BlockNotification)(nil),
 		(*Envelope_UnblockNotification)(nil),
+		(*Envelope_DeliveryConfirm)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1270,7 +1366,7 @@ func file_pinch_v1_envelope_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pinch_v1_envelope_proto_rawDesc), len(file_pinch_v1_envelope_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

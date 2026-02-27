@@ -25,7 +25,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **RELY-01**: Go relay server accepts WebSocket connections and routes encrypted blobs without inspecting content
 - [x] **RELY-02**: Relay authenticates agents via Ed25519 challenge-response (relay sends nonce, agent signs, relay verifies)
 - [x] **RELY-03**: Relay maintains a hub routing table mapping `pinch:` addresses to active WebSocket connections
-- [ ] **RELY-04**: Relay delivers messages in real-time when both agents are online (sub-100ms relay hop)
+- [x] **RELY-04**: Relay delivers messages in real-time when both agents are online (sub-100ms relay hop)
 - [ ] **RELY-05**: Relay queues encrypted messages in bbolt for offline agents with configurable TTL (7-day default)
 - [ ] **RELY-06**: Relay flushes queued messages to agent on reconnection in order
 - [ ] **RELY-07**: Relay enforces per-connection rate limiting (token bucket or sliding window)
@@ -33,11 +33,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Encryption
 
-- [ ] **CRYP-01**: Agent encrypts 1:1 messages using NaCl box (X25519 key exchange + XSalsa20-Poly1305)
+- [x] **CRYP-01**: Agent encrypts 1:1 messages using NaCl box (X25519 key exchange + XSalsa20-Poly1305)
 - [x] **CRYP-02**: Agent converts Ed25519 signing keys to X25519 encryption keys using libsodium/edwards25519
 - [x] **CRYP-03**: Every encrypted message uses a unique 24-byte random nonce from CSPRNG, prepended to ciphertext
 - [x] **CRYP-04**: Cross-language crypto roundtrip tests pass in CI (Go encrypts/TS decrypts and vice versa)
-- [ ] **CRYP-05**: Sender receives E2E signed delivery confirmation when message is delivered to recipient
+- [x] **CRYP-05**: Sender receives E2E signed delivery confirmation when message is delivered to recipient
 
 ### Connection
 
@@ -72,10 +72,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Skill Integration
 
-- [ ] **SKIL-01**: OpenClaw SKILL.md definition with YAML frontmatter and markdown body
-- [ ] **SKIL-02**: Persistent background listener maintains WebSocket connection via OpenClaw heartbeat cycle
-- [ ] **SKIL-03**: Outbound tools follow standard OpenClaw skill patterns (pinch_send, pinch_connect, pinch_history, etc.)
-- [ ] **SKIL-04**: Skill processes inbound messages/requests and routes based on autonomy level
+- [x] **SKIL-01**: OpenClaw SKILL.md definition with YAML frontmatter and markdown body
+- [x] **SKIL-02**: Persistent background listener maintains WebSocket connection via OpenClaw heartbeat cycle
+- [x] **SKIL-03**: Outbound tools follow standard OpenClaw skill patterns (pinch_send, pinch_connect, pinch_history, etc.)
+- [x] **SKIL-04**: Skill processes inbound messages/requests and routes based on autonomy level
 
 ## v2 Requirements
 
@@ -130,16 +130,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RELY-01 | Phase 1 | Complete |
 | RELY-02 | Phase 2 | Complete |
 | RELY-03 | Phase 1 | Complete |
-| RELY-04 | Phase 3 | Pending |
+| RELY-04 | Phase 3 | Complete |
 | RELY-05 | Phase 4 | Pending |
 | RELY-06 | Phase 4 | Pending |
 | RELY-07 | Phase 6 | Pending |
 | RELY-08 | Phase 1 | Complete |
-| CRYP-01 | Phase 3 | Pending |
+| CRYP-01 | Phase 3 | Complete |
 | CRYP-02 | Phase 1 | Complete |
 | CRYP-03 | Phase 1 | Complete |
 | CRYP-04 | Phase 1 | Complete |
-| CRYP-05 | Phase 3 | Pending |
+| CRYP-05 | Phase 3 | Complete |
 | CONN-01 | Phase 2 | Complete |
 | CONN-02 | Phase 2 | Complete |
 | CONN-03 | Phase 2 | Complete |
@@ -162,10 +162,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVRS-04 | Phase 6 | Pending |
 | OVRS-05 | Phase 6 | Pending |
 | OVRS-06 | Phase 6 | Pending |
-| SKIL-01 | Phase 3 | Pending |
-| SKIL-02 | Phase 3 | Pending |
-| SKIL-03 | Phase 3 | Pending |
-| SKIL-04 | Phase 3 | Pending |
+| SKIL-01 | Phase 3 | Complete |
+| SKIL-02 | Phase 3 | Complete |
+| SKIL-03 | Phase 3 | Complete |
+| SKIL-04 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 46 total

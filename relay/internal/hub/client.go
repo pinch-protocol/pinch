@@ -64,6 +64,12 @@ func (c *Client) ReadPump() {
 		c.hub.Unregister(c)
 	}()
 
+	// Set WebSocket read limit above maxEnvelopeSize so that oversized
+	// envelopes reach RouteMessage for application-level silent drop rather
+	// than causing a WebSocket-level connection close. We use 2x the envelope
+	// limit as the hard WebSocket cutoff.
+	c.conn.SetReadLimit(2 * maxEnvelopeSize)
+
 	for {
 		readCtx, readCancel := context.WithTimeout(c.ctx, readTimeout)
 		_, data, err := c.conn.Read(readCtx)

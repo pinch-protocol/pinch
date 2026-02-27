@@ -19,6 +19,8 @@ export interface RelayClientOptions {
 	pongTimeout?: number;
 	/** Maximum time to wait for the auth handshake in milliseconds. Default: 10000. */
 	authTimeout?: number;
+	/** Enable automatic reconnection with exponential backoff. Default: false. */
+	autoReconnect?: boolean;
 }
 
 /**
@@ -40,7 +42,15 @@ export class RelayClient {
 	private pongTimeout: number;
 	private authTimeout: number;
 	private messageHandler: ((data: Buffer) => void) | null = null;
-	private envelopeHandler: ((envelope: Envelope) => void) | null = null;
+	private envelopeHandlers: ((envelope: Envelope) => void)[] = [];
+
+	// Reconnection fields
+	private baseDelay = 500;
+	private maxDelay = 30_000;
+	private maxAttempts = 20;
+	private reconnectAttempt = 0;
+	private autoReconnect: boolean;
+	private disconnectHandler: (() => void) | null = null;
 
 	/** The pinch: address assigned by the relay after successful auth. */
 	assignedAddress: string | null = null;
@@ -57,6 +67,7 @@ export class RelayClient {
 		this.heartbeatInterval = options?.heartbeatInterval ?? 25_000;
 		this.pongTimeout = options?.pongTimeout ?? 7_000;
 		this.authTimeout = options?.authTimeout ?? 10_000;
+		this.autoReconnect = options?.autoReconnect ?? false;
 	}
 
 	/**
@@ -180,15 +191,17 @@ export class RelayClient {
 						if (this.messageHandler) {
 							this.messageHandler(data);
 						}
-						if (this.envelopeHandler) {
+						if (this.envelopeHandlers.length > 0) {
 							try {
 								const env = fromBinary(
 									EnvelopeSchema,
 									new Uint8Array(data),
 								);
-								this.envelopeHandler(env);
+								for (const handler of this.envelopeHandlers) {
+									handler(env);
+								}
 							} catch {
-								// Invalid protobuf -- skip envelope handler.
+								// Invalid protobuf -- skip envelope handlers.
 							}
 						}
 					}
@@ -207,6 +220,10 @@ export class RelayClient {
 				this.cleanup();
 				if (authState !== "done") {
 					reject(new Error("connection closed during auth handshake"));
+				} else if (this.autoReconnect) {
+					// Was authenticated and connected, then disconnected --
+					// attempt reconnection with exponential backoff.
+					this.attemptReconnect();
 				}
 			});
 
@@ -221,14 +238,23 @@ export class RelayClient {
 	}
 
 	/**
-	 * Disconnect from the relay server. Closes the WebSocket cleanly
-	 * and stops the heartbeat timer.
+	 * Disconnect from the relay server. Closes the WebSocket cleanly,
+	 * stops the heartbeat timer, and disables auto-reconnection.
 	 */
 	disconnect(): void {
+		this.autoReconnect = false;
 		if (this.ws) {
 			this.ws.close(1000, "client disconnect");
 			this.cleanup();
 		}
+	}
+
+	/**
+	 * Register a handler called when the connection is permanently lost
+	 * (all reconnection attempts exhausted).
+	 */
+	onDisconnect(handler: () => void): void {
+		this.disconnectHandler = handler;
 	}
 
 	/**
@@ -247,11 +273,12 @@ export class RelayClient {
 
 	/**
 	 * Register a handler for deserialized protobuf Envelopes (post-auth only).
+	 * Multiple handlers can be registered; all receive the same Envelope.
 	 * The handler receives parsed Envelope objects so downstream code
 	 * doesn't need to deal with raw bytes.
 	 */
 	onEnvelope(handler: (envelope: Envelope) => void): void {
-		this.envelopeHandler = handler;
+		this.envelopeHandlers.push(handler);
 	}
 
 	/**
@@ -314,6 +341,34 @@ export class RelayClient {
 
 			this.ws.ping();
 		}, this.heartbeatInterval);
+	}
+
+	/**
+	 * Attempt reconnection with exponential backoff and jitter.
+	 * Tries up to maxAttempts times before giving up.
+	 */
+	private async attemptReconnect(): Promise<void> {
+		while (this.reconnectAttempt < this.maxAttempts) {
+			const delay = Math.min(
+				this.baseDelay * 2 ** this.reconnectAttempt +
+					Math.random() * 1000,
+				this.maxDelay,
+			);
+			await new Promise((r) => setTimeout(r, delay));
+
+			try {
+				await this.connect();
+				this.reconnectAttempt = 0;
+				return;
+			} catch {
+				this.reconnectAttempt++;
+			}
+		}
+
+		// All attempts exhausted -- notify disconnect handler.
+		if (this.disconnectHandler) {
+			this.disconnectHandler();
+		}
 	}
 
 	/**

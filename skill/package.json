@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "bin": {
+    "pinch-send": "./dist/tools/pinch-send.js",
+    "pinch-connect": "./dist/tools/pinch-connect.js",
+    "pinch-contacts": "./dist/tools/pinch-contacts.js",
+    "pinch-history": "./dist/tools/pinch-history.js",
+    "pinch-status": "./dist/tools/pinch-status.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -11,12 +18,15 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
     "@pinch/proto": "workspace:*",
+    "better-sqlite3": "^12.6.2",
     "bs58": "^6.0.0",
     "libsodium-wrappers-sumo": "0.8.0",
+    "uuid": "^13.0.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/ws": "latest",
     "tsx": "^4.21.0",
     "typescript": "latest",
