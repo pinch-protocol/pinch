@@ -281,7 +281,9 @@ func sendAuthFailure(ctx context.Context, conn *websocket.Conn, errMsg string) {
 	if err != nil {
 		return
 	}
-	_ = conn.Write(ctx, websocket.MessageBinary, data)
+	if err := conn.Write(ctx, websocket.MessageBinary, data); err != nil {
+		slog.Debug("failed to send auth failure message", "error", err)
+	}
 }
 
 var (

@@ -105,7 +105,6 @@ export async function bootstrap(): Promise<BootstrapResult> {
 	const connectionManager = new ConnectionManager(
 		relayClient,
 		connectionStore,
-		keypair,
 	);
 	const messageManager = new MessageManager(
 		relayClient,

@@ -165,7 +165,10 @@ func (c *Client) Send(data []byte) (ok bool) {
 	}
 
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			slog.Debug("send on closed channel, dropping message",
+				"address", c.address,
+			)
 			ok = false
 		}
 	}()
