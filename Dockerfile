@@ -2,7 +2,7 @@
 
 FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ COPY relay/go.mod relay/go.sum ./relay/
 COPY gen/go/go.mod ./gen/go/
 
 # Download dependencies (workspace-aware)
-RUN go mod download -x 2>&1 | tail -10
+RUN go mod download
 
 # Copy source
 COPY relay/ ./relay/
@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     ./relay/cmd/pinchd
 
 
-FROM alpine:latest AS runtime
+FROM alpine:3.20 AS runtime
 
 RUN apk add --no-cache ca-certificates && mkdir -p /data
 
