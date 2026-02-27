@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"crypto/ed25519"
 	"log/slog"
 	"time"
 
@@ -29,27 +30,30 @@ const (
 // Each client has its own read, write, and heartbeat goroutines
 // managed by a shared context.
 type Client struct {
-	hub     *Hub
-	conn    *websocket.Conn
-	address string
-	send    chan []byte
-	ctx     context.Context
-	cancel  context.CancelFunc
+	hub       *Hub
+	conn      *websocket.Conn
+	address   string
+	PublicKey ed25519.PublicKey
+	send      chan []byte
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // NewClient creates a new Client bound to the given hub and WebSocket connection.
-// The address is the pinch: address claimed by the connecting agent.
+// The address is the pinch: address derived from the authenticated public key.
+// The pubKey is the Ed25519 public key verified during the auth handshake.
 // The provided context controls the client's lifecycle; cancelling it
 // stops all client goroutines.
-func NewClient(hub *Hub, conn *websocket.Conn, address string, ctx context.Context) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, address string, pubKey ed25519.PublicKey, ctx context.Context) *Client {
 	clientCtx, cancel := context.WithCancel(ctx)
 	return &Client{
-		hub:     hub,
-		conn:    conn,
-		address: address,
-		send:    make(chan []byte, sendBufferSize),
-		ctx:     clientCtx,
-		cancel:  cancel,
+		hub:       hub,
+		conn:      conn,
+		address:   address,
+		PublicKey: pubKey,
+		send:      make(chan []byte, sendBufferSize),
+		ctx:       clientCtx,
+		cancel:    cancel,
 	}
 }
 

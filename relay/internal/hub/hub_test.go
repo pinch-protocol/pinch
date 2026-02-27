@@ -38,7 +38,7 @@ func newTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hu
 			t.Logf("websocket accept error: %v", err)
 			return
 		}
-		client := hub.NewClient(h, conn, address, ctx)
+		client := hub.NewClient(h, conn, address, nil, ctx)
 		h.Register(client)
 		go client.ReadPump()
 		go client.WritePump()
