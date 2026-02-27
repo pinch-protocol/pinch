@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 3 of 6 (Encrypted 1:1 Messaging)
-Plan: 3 of 4 in current phase
+Plan: 4 of 4 in current phase
 Status: In Progress
-Last activity: 2026-02-27 -- Completed 03-01-PLAN.md (03-01 and 03-02 done)
+Last activity: 2026-02-27 -- Completed 03-03-PLAN.md (03-01, 03-02, 03-03 done)
 
-Progress: [██████░░░░] 62%
+Progress: [███████░░░] 69%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 6min
-- Total execution time: 0.9 hours
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [██████░░░░] 62%
 |-------|-------|-------|----------|
 | 01 | 3 | 18min | 6min |
 | 02 | 4 | 24min | 6min |
-| 03 | 2 | 14min | 7min |
+| 03 | 3 | 19min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (8min), 02-04 (7min), 03-01 (9min), 03-02 (5min)
+- Last 5 plans: 02-04 (7min), 03-01 (9min), 03-02 (5min), 03-03 (5min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -42,6 +42,7 @@ Progress: [██████░░░░] 62%
 | Phase 02 P04 | 7min | 2 tasks | 6 files |
 | Phase 03 P01 | 9min | 2 tasks | 6 files |
 | Phase 03 P02 | 5min | 2 tasks | 9 files |
+| Phase 03 P03 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,10 @@ Recent decisions affecting current work:
 - [Phase 03]: better-sqlite3 native binding via prebuild-install for message store
 - [Phase 03]: ConnectionManager.keypair optional parameter for backward compatibility
 - [Phase 03]: Atomic sequence counters via SQL transactions (INSERT OR IGNORE + UPDATE RETURNING)
+- [03-03]: RelayClient.onEnvelope changed from single callback to array for ConnectionManager + MessageManager coexistence
+- [03-03]: RelayClient.disconnect() disables autoReconnect to prevent reconnection after intentional disconnect
+- [03-03]: InboundRouter defaults unknown autonomy levels to full_manual (escalated_to_human) for safety
+- [03-03]: getPendingForReview returns ASC order (oldest first) for HEARTBEAT.md checklist
 
 ### Pending Todos
 
@@ -94,5 +99,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 03-01-PLAN.md
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

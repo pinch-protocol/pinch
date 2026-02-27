@@ -75,7 +75,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SKIL-01**: OpenClaw SKILL.md definition with YAML frontmatter and markdown body
 - [ ] **SKIL-02**: Persistent background listener maintains WebSocket connection via OpenClaw heartbeat cycle
 - [ ] **SKIL-03**: Outbound tools follow standard OpenClaw skill patterns (pinch_send, pinch_connect, pinch_history, etc.)
-- [ ] **SKIL-04**: Skill processes inbound messages/requests and routes based on autonomy level
+- [x] **SKIL-04**: Skill processes inbound messages/requests and routes based on autonomy level
 
 ## v2 Requirements
 
@@ -165,7 +165,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SKIL-01 | Phase 3 | Pending |
 | SKIL-02 | Phase 3 | Pending |
 | SKIL-03 | Phase 3 | Pending |
-| SKIL-04 | Phase 3 | Pending |
+| SKIL-04 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 46 total
