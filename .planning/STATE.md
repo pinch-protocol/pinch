@@ -32,10 +32,10 @@ Progress: [█████████████████████░░
 | 03 | 4 | 23min | 6min |
 | 04 | 2 | 15min | 8min |
 | 05 | 3 | 15min | 5min |
-| 06 | 1 | 4min | 4min |
+| 06 | 2 | 8min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (6min), 05-02 (4min), 05-03 (5min), 06-01 (4min)
+- Last 5 plans: 05-02 (4min), 05-03 (5min), 06-01 (4min), 06-02 (4min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -53,6 +53,7 @@ Progress: [█████████████████████░░
 | Phase 05 P02 | 4min | 2 tasks | 11 files |
 | Phase 05 P03 | 5min | 2 tasks | 11 files |
 | Phase 06 P01 | 4min | 2 tasks | 5 files |
+| Phase 06 P02 | 4min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,10 @@ Recent decisions affecting current work:
 - [06-01]: Genesis entry has prevHash="" -- old entries without hashes are pre-audit
 - [06-01]: Muted events excluded by default in pinch_activity; --include-muted overrides for audit
 - [06-01]: computeEntryHash exported for reuse by audit verification tool in later plans
+- [06-02]: Token bucket via golang.org/x/time/rate (stdlib-quality, minimal dependency)
+- [06-02]: Rate limit check BEFORE envelope size check for fastest rejection path
+- [06-02]: Lazy limiter creation per address (memory proportional to active clients)
+- [06-02]: TypeScript handler logs only (no backoff in v1 -- rate limits for obvious abuse)
 
 ### Pending Todos
 
@@ -136,5 +141,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 06-01-PLAN.md
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None

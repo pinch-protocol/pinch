@@ -28,7 +28,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **RELY-04**: Relay delivers messages in real-time when both agents are online (sub-100ms relay hop)
 - [x] **RELY-05**: Relay queues encrypted messages in bbolt for offline agents with configurable TTL (7-day default)
 - [x] **RELY-06**: Relay flushes queued messages to agent on reconnection in order
-- [ ] **RELY-07**: Relay enforces per-connection rate limiting (token bucket or sliding window)
+- [x] **RELY-07**: Relay enforces per-connection rate limiting (token bucket or sliding window)
 - [x] **RELY-08**: Relay implements ping/pong heartbeats (20-30s interval, 5-10s pong timeout) to prevent goroutine leaks
 
 ### Encryption
@@ -133,7 +133,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RELY-04 | Phase 3 | Complete |
 | RELY-05 | Phase 4 | Complete |
 | RELY-06 | Phase 4 | Complete |
-| RELY-07 | Phase 6 | Pending |
+| RELY-07 | Phase 6 | Complete |
 | RELY-08 | Phase 1 | Complete |
 | CRYP-01 | Phase 3 | Complete |
 | CRYP-02 | Phase 1 | Complete |
