@@ -273,7 +273,7 @@ Set the autonomy level for a connection.
 |-----------|----------|-------------|
 | `--address` | Yes | Peer's pinch address |
 | `--level` | Yes | `full_manual`, `notify`, `auto_respond`, `full_auto` |
-| `--confirmed` | No | **Required** when upgrading to `full_auto` |
+| `--confirmed` | Conditional | **Required** when upgrading to `full_auto` |
 | `--policy` | No | Natural language policy text (for `auto_respond`) |
 
 ```bash
