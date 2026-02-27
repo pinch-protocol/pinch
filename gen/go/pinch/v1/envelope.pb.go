@@ -25,40 +25,52 @@ const (
 type MessageType int32
 
 const (
-	MessageType_MESSAGE_TYPE_UNSPECIFIED         MessageType = 0
-	MessageType_MESSAGE_TYPE_HANDSHAKE           MessageType = 1
-	MessageType_MESSAGE_TYPE_AUTH_CHALLENGE      MessageType = 2
-	MessageType_MESSAGE_TYPE_AUTH_RESPONSE       MessageType = 3
-	MessageType_MESSAGE_TYPE_MESSAGE             MessageType = 4
-	MessageType_MESSAGE_TYPE_DELIVERY_CONFIRM    MessageType = 5
-	MessageType_MESSAGE_TYPE_CONNECTION_REQUEST  MessageType = 6
-	MessageType_MESSAGE_TYPE_CONNECTION_RESPONSE MessageType = 7
-	MessageType_MESSAGE_TYPE_HEARTBEAT           MessageType = 8
+	MessageType_MESSAGE_TYPE_UNSPECIFIED          MessageType = 0
+	MessageType_MESSAGE_TYPE_HANDSHAKE            MessageType = 1
+	MessageType_MESSAGE_TYPE_AUTH_CHALLENGE       MessageType = 2
+	MessageType_MESSAGE_TYPE_AUTH_RESPONSE        MessageType = 3
+	MessageType_MESSAGE_TYPE_MESSAGE              MessageType = 4
+	MessageType_MESSAGE_TYPE_DELIVERY_CONFIRM     MessageType = 5
+	MessageType_MESSAGE_TYPE_CONNECTION_REQUEST   MessageType = 6
+	MessageType_MESSAGE_TYPE_CONNECTION_RESPONSE  MessageType = 7
+	MessageType_MESSAGE_TYPE_HEARTBEAT            MessageType = 8
+	MessageType_MESSAGE_TYPE_AUTH_RESULT          MessageType = 9
+	MessageType_MESSAGE_TYPE_CONNECTION_REVOKE    MessageType = 10
+	MessageType_MESSAGE_TYPE_BLOCK_NOTIFICATION   MessageType = 11
+	MessageType_MESSAGE_TYPE_UNBLOCK_NOTIFICATION MessageType = 12
 )
 
 // Enum value maps for MessageType.
 var (
 	MessageType_name = map[int32]string{
-		0: "MESSAGE_TYPE_UNSPECIFIED",
-		1: "MESSAGE_TYPE_HANDSHAKE",
-		2: "MESSAGE_TYPE_AUTH_CHALLENGE",
-		3: "MESSAGE_TYPE_AUTH_RESPONSE",
-		4: "MESSAGE_TYPE_MESSAGE",
-		5: "MESSAGE_TYPE_DELIVERY_CONFIRM",
-		6: "MESSAGE_TYPE_CONNECTION_REQUEST",
-		7: "MESSAGE_TYPE_CONNECTION_RESPONSE",
-		8: "MESSAGE_TYPE_HEARTBEAT",
+		0:  "MESSAGE_TYPE_UNSPECIFIED",
+		1:  "MESSAGE_TYPE_HANDSHAKE",
+		2:  "MESSAGE_TYPE_AUTH_CHALLENGE",
+		3:  "MESSAGE_TYPE_AUTH_RESPONSE",
+		4:  "MESSAGE_TYPE_MESSAGE",
+		5:  "MESSAGE_TYPE_DELIVERY_CONFIRM",
+		6:  "MESSAGE_TYPE_CONNECTION_REQUEST",
+		7:  "MESSAGE_TYPE_CONNECTION_RESPONSE",
+		8:  "MESSAGE_TYPE_HEARTBEAT",
+		9:  "MESSAGE_TYPE_AUTH_RESULT",
+		10: "MESSAGE_TYPE_CONNECTION_REVOKE",
+		11: "MESSAGE_TYPE_BLOCK_NOTIFICATION",
+		12: "MESSAGE_TYPE_UNBLOCK_NOTIFICATION",
 	}
 	MessageType_value = map[string]int32{
-		"MESSAGE_TYPE_UNSPECIFIED":         0,
-		"MESSAGE_TYPE_HANDSHAKE":           1,
-		"MESSAGE_TYPE_AUTH_CHALLENGE":      2,
-		"MESSAGE_TYPE_AUTH_RESPONSE":       3,
-		"MESSAGE_TYPE_MESSAGE":             4,
-		"MESSAGE_TYPE_DELIVERY_CONFIRM":    5,
-		"MESSAGE_TYPE_CONNECTION_REQUEST":  6,
-		"MESSAGE_TYPE_CONNECTION_RESPONSE": 7,
-		"MESSAGE_TYPE_HEARTBEAT":           8,
+		"MESSAGE_TYPE_UNSPECIFIED":          0,
+		"MESSAGE_TYPE_HANDSHAKE":            1,
+		"MESSAGE_TYPE_AUTH_CHALLENGE":       2,
+		"MESSAGE_TYPE_AUTH_RESPONSE":        3,
+		"MESSAGE_TYPE_MESSAGE":              4,
+		"MESSAGE_TYPE_DELIVERY_CONFIRM":     5,
+		"MESSAGE_TYPE_CONNECTION_REQUEST":   6,
+		"MESSAGE_TYPE_CONNECTION_RESPONSE":  7,
+		"MESSAGE_TYPE_HEARTBEAT":            8,
+		"MESSAGE_TYPE_AUTH_RESULT":          9,
+		"MESSAGE_TYPE_CONNECTION_REVOKE":    10,
+		"MESSAGE_TYPE_BLOCK_NOTIFICATION":   11,
+		"MESSAGE_TYPE_UNBLOCK_NOTIFICATION": 12,
 	}
 )
 
@@ -104,6 +116,14 @@ type Envelope struct {
 	//	*Envelope_Encrypted
 	//	*Envelope_Handshake
 	//	*Envelope_Heartbeat
+	//	*Envelope_AuthChallenge
+	//	*Envelope_AuthResponse
+	//	*Envelope_AuthResult
+	//	*Envelope_ConnectionRequest
+	//	*Envelope_ConnectionResponse
+	//	*Envelope_ConnectionRevoke
+	//	*Envelope_BlockNotification
+	//	*Envelope_UnblockNotification
 	Payload       isEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -215,6 +235,78 @@ func (x *Envelope) GetHeartbeat() *Heartbeat {
 	return nil
 }
 
+func (x *Envelope) GetAuthChallenge() *AuthChallenge {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_AuthChallenge); ok {
+			return x.AuthChallenge
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAuthResponse() *AuthResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_AuthResponse); ok {
+			return x.AuthResponse
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAuthResult() *AuthResult {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_AuthResult); ok {
+			return x.AuthResult
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetConnectionRequest() *ConnectionRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_ConnectionRequest); ok {
+			return x.ConnectionRequest
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetConnectionResponse() *ConnectionResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_ConnectionResponse); ok {
+			return x.ConnectionResponse
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetConnectionRevoke() *ConnectionRevoke {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_ConnectionRevoke); ok {
+			return x.ConnectionRevoke
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetBlockNotification() *BlockNotification {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_BlockNotification); ok {
+			return x.BlockNotification
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetUnblockNotification() *UnblockNotification {
+	if x != nil {
+		if x, ok := x.Payload.(*Envelope_UnblockNotification); ok {
+			return x.UnblockNotification
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Payload interface {
 	isEnvelope_Payload()
 }
@@ -231,11 +323,59 @@ type Envelope_Heartbeat struct {
 	Heartbeat *Heartbeat `protobuf:"bytes,12,opt,name=heartbeat,proto3,oneof"`
 }
 
+type Envelope_AuthChallenge struct {
+	AuthChallenge *AuthChallenge `protobuf:"bytes,13,opt,name=auth_challenge,json=authChallenge,proto3,oneof"`
+}
+
+type Envelope_AuthResponse struct {
+	AuthResponse *AuthResponse `protobuf:"bytes,14,opt,name=auth_response,json=authResponse,proto3,oneof"`
+}
+
+type Envelope_AuthResult struct {
+	AuthResult *AuthResult `protobuf:"bytes,15,opt,name=auth_result,json=authResult,proto3,oneof"`
+}
+
+type Envelope_ConnectionRequest struct {
+	ConnectionRequest *ConnectionRequest `protobuf:"bytes,16,opt,name=connection_request,json=connectionRequest,proto3,oneof"`
+}
+
+type Envelope_ConnectionResponse struct {
+	ConnectionResponse *ConnectionResponse `protobuf:"bytes,17,opt,name=connection_response,json=connectionResponse,proto3,oneof"`
+}
+
+type Envelope_ConnectionRevoke struct {
+	ConnectionRevoke *ConnectionRevoke `protobuf:"bytes,18,opt,name=connection_revoke,json=connectionRevoke,proto3,oneof"`
+}
+
+type Envelope_BlockNotification struct {
+	BlockNotification *BlockNotification `protobuf:"bytes,19,opt,name=block_notification,json=blockNotification,proto3,oneof"`
+}
+
+type Envelope_UnblockNotification struct {
+	UnblockNotification *UnblockNotification `protobuf:"bytes,20,opt,name=unblock_notification,json=unblockNotification,proto3,oneof"`
+}
+
 func (*Envelope_Encrypted) isEnvelope_Payload() {}
 
 func (*Envelope_Handshake) isEnvelope_Payload() {}
 
 func (*Envelope_Heartbeat) isEnvelope_Payload() {}
+
+func (*Envelope_AuthChallenge) isEnvelope_Payload() {}
+
+func (*Envelope_AuthResponse) isEnvelope_Payload() {}
+
+func (*Envelope_AuthResult) isEnvelope_Payload() {}
+
+func (*Envelope_ConnectionRequest) isEnvelope_Payload() {}
+
+func (*Envelope_ConnectionResponse) isEnvelope_Payload() {}
+
+func (*Envelope_ConnectionRevoke) isEnvelope_Payload() {}
+
+func (*Envelope_BlockNotification) isEnvelope_Payload() {}
+
+func (*Envelope_UnblockNotification) isEnvelope_Payload() {}
 
 // EncryptedPayload is an opaque encrypted blob. The relay cannot read this.
 type EncryptedPayload struct {
@@ -483,11 +623,484 @@ func (x *Heartbeat) GetTimestamp() int64 {
 	return 0
 }
 
+// AuthChallenge is sent by the relay after WebSocket upgrade.
+// The client must sign the nonce with its Ed25519 private key.
+type AuthChallenge struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nonce         []byte                 `protobuf:"bytes,1,opt,name=nonce,proto3" json:"nonce,omitempty"`          // 32-byte random challenge
+	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // server timestamp for timeout tracking
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthChallenge) Reset() {
+	*x = AuthChallenge{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthChallenge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthChallenge) ProtoMessage() {}
+
+func (x *AuthChallenge) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthChallenge.ProtoReflect.Descriptor instead.
+func (*AuthChallenge) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *AuthChallenge) GetNonce() []byte {
+	if x != nil {
+		return x.Nonce
+	}
+	return nil
+}
+
+func (x *AuthChallenge) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+// AuthResponse is the client's signed response to an AuthChallenge.
+type AuthResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Signature     []byte                 `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`                  // 64-byte Ed25519 signature of the nonce
+	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"` // 32-byte Ed25519 public key
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthResponse) Reset() {
+	*x = AuthResponse{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthResponse) ProtoMessage() {}
+
+func (x *AuthResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthResponse.ProtoReflect.Descriptor instead.
+func (*AuthResponse) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *AuthResponse) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *AuthResponse) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+// AuthResult is sent by the relay after verifying the AuthResponse.
+type AuthResult struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Success         bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`          // only populated on failure
+	AssignedAddress string                 `protobuf:"bytes,3,opt,name=assigned_address,json=assignedAddress,proto3" json:"assigned_address,omitempty"` // the pinch: address derived from pubkey
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AuthResult) Reset() {
+	*x = AuthResult{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthResult) ProtoMessage() {}
+
+func (x *AuthResult) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthResult.ProtoReflect.Descriptor instead.
+func (*AuthResult) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *AuthResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *AuthResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *AuthResult) GetAssignedAddress() string {
+	if x != nil {
+		return x.AssignedAddress
+	}
+	return ""
+}
+
+// ConnectionRequest is sent by an agent to request a connection with another agent.
+type ConnectionRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress     string                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
+	ToAddress       string                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
+	Message         string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"` // free-text short message, max 280 chars enforced at application level
+	SenderPublicKey []byte                 `protobuf:"bytes,4,opt,name=sender_public_key,json=senderPublicKey,proto3" json:"sender_public_key,omitempty"`
+	ExpiresAt       int64                  `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"` // Unix timestamp for 7-day TTL
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ConnectionRequest) Reset() {
+	*x = ConnectionRequest{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConnectionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConnectionRequest) ProtoMessage() {}
+
+func (x *ConnectionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConnectionRequest.ProtoReflect.Descriptor instead.
+func (*ConnectionRequest) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ConnectionRequest) GetFromAddress() string {
+	if x != nil {
+		return x.FromAddress
+	}
+	return ""
+}
+
+func (x *ConnectionRequest) GetToAddress() string {
+	if x != nil {
+		return x.ToAddress
+	}
+	return ""
+}
+
+func (x *ConnectionRequest) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ConnectionRequest) GetSenderPublicKey() []byte {
+	if x != nil {
+		return x.SenderPublicKey
+	}
+	return nil
+}
+
+func (x *ConnectionRequest) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+// ConnectionResponse is the recipient's response to a ConnectionRequest.
+type ConnectionResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress        string                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
+	ToAddress          string                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
+	Accepted           bool                   `protobuf:"varint,3,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	ResponderPublicKey []byte                 `protobuf:"bytes,4,opt,name=responder_public_key,json=responderPublicKey,proto3" json:"responder_public_key,omitempty"` // only populated if accepted
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ConnectionResponse) Reset() {
+	*x = ConnectionResponse{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConnectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConnectionResponse) ProtoMessage() {}
+
+func (x *ConnectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConnectionResponse.ProtoReflect.Descriptor instead.
+func (*ConnectionResponse) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ConnectionResponse) GetFromAddress() string {
+	if x != nil {
+		return x.FromAddress
+	}
+	return ""
+}
+
+func (x *ConnectionResponse) GetToAddress() string {
+	if x != nil {
+		return x.ToAddress
+	}
+	return ""
+}
+
+func (x *ConnectionResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *ConnectionResponse) GetResponderPublicKey() []byte {
+	if x != nil {
+		return x.ResponderPublicKey
+	}
+	return nil
+}
+
+// ConnectionRevoke severs a connection between two agents without blocking.
+type ConnectionRevoke struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   string                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
+	ToAddress     string                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConnectionRevoke) Reset() {
+	*x = ConnectionRevoke{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConnectionRevoke) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConnectionRevoke) ProtoMessage() {}
+
+func (x *ConnectionRevoke) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConnectionRevoke.ProtoReflect.Descriptor instead.
+func (*ConnectionRevoke) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ConnectionRevoke) GetFromAddress() string {
+	if x != nil {
+		return x.FromAddress
+	}
+	return ""
+}
+
+func (x *ConnectionRevoke) GetToAddress() string {
+	if x != nil {
+		return x.ToAddress
+	}
+	return ""
+}
+
+// BlockNotification informs the relay that an agent has blocked another.
+type BlockNotification struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	BlockerAddress string                 `protobuf:"bytes,1,opt,name=blocker_address,json=blockerAddress,proto3" json:"blocker_address,omitempty"`
+	BlockedAddress string                 `protobuf:"bytes,2,opt,name=blocked_address,json=blockedAddress,proto3" json:"blocked_address,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BlockNotification) Reset() {
+	*x = BlockNotification{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockNotification) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockNotification) ProtoMessage() {}
+
+func (x *BlockNotification) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockNotification.ProtoReflect.Descriptor instead.
+func (*BlockNotification) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *BlockNotification) GetBlockerAddress() string {
+	if x != nil {
+		return x.BlockerAddress
+	}
+	return ""
+}
+
+func (x *BlockNotification) GetBlockedAddress() string {
+	if x != nil {
+		return x.BlockedAddress
+	}
+	return ""
+}
+
+// UnblockNotification informs the relay that an agent has unblocked another.
+type UnblockNotification struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	UnblockerAddress string                 `protobuf:"bytes,1,opt,name=unblocker_address,json=unblockerAddress,proto3" json:"unblocker_address,omitempty"`
+	UnblockedAddress string                 `protobuf:"bytes,2,opt,name=unblocked_address,json=unblockedAddress,proto3" json:"unblocked_address,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *UnblockNotification) Reset() {
+	*x = UnblockNotification{}
+	mi := &file_pinch_v1_envelope_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnblockNotification) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnblockNotification) ProtoMessage() {}
+
+func (x *UnblockNotification) ProtoReflect() protoreflect.Message {
+	mi := &file_pinch_v1_envelope_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnblockNotification.ProtoReflect.Descriptor instead.
+func (*UnblockNotification) Descriptor() ([]byte, []int) {
+	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UnblockNotification) GetUnblockerAddress() string {
+	if x != nil {
+		return x.UnblockerAddress
+	}
+	return ""
+}
+
+func (x *UnblockNotification) GetUnblockedAddress() string {
+	if x != nil {
+		return x.UnblockedAddress
+	}
+	return ""
+}
+
 var File_pinch_v1_envelope_proto protoreflect.FileDescriptor
 
 const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x17pinch/v1/envelope.proto\x12\bpinch.v1\"\xff\x02\n" +
+	"\x17pinch/v1/envelope.proto\x12\bpinch.v1\"\xc5\a\n" +
 	"\bEnvelope\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\rR\aversion\x12!\n" +
 	"\ffrom_address\x18\x02 \x01(\tR\vfromAddress\x12\x1d\n" +
@@ -500,7 +1113,16 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\tencrypted\x18\n" +
 	" \x01(\v2\x1a.pinch.v1.EncryptedPayloadH\x00R\tencrypted\x123\n" +
 	"\thandshake\x18\v \x01(\v2\x13.pinch.v1.HandshakeH\x00R\thandshake\x123\n" +
-	"\theartbeat\x18\f \x01(\v2\x13.pinch.v1.HeartbeatH\x00R\theartbeatB\t\n" +
+	"\theartbeat\x18\f \x01(\v2\x13.pinch.v1.HeartbeatH\x00R\theartbeat\x12@\n" +
+	"\x0eauth_challenge\x18\r \x01(\v2\x17.pinch.v1.AuthChallengeH\x00R\rauthChallenge\x12=\n" +
+	"\rauth_response\x18\x0e \x01(\v2\x16.pinch.v1.AuthResponseH\x00R\fauthResponse\x127\n" +
+	"\vauth_result\x18\x0f \x01(\v2\x14.pinch.v1.AuthResultH\x00R\n" +
+	"authResult\x12L\n" +
+	"\x12connection_request\x18\x10 \x01(\v2\x1b.pinch.v1.ConnectionRequestH\x00R\x11connectionRequest\x12O\n" +
+	"\x13connection_response\x18\x11 \x01(\v2\x1c.pinch.v1.ConnectionResponseH\x00R\x12connectionResponse\x12I\n" +
+	"\x11connection_revoke\x18\x12 \x01(\v2\x1a.pinch.v1.ConnectionRevokeH\x00R\x10connectionRevoke\x12L\n" +
+	"\x12block_notification\x18\x13 \x01(\v2\x1b.pinch.v1.BlockNotificationH\x00R\x11blockNotification\x12R\n" +
+	"\x14unblock_notification\x18\x14 \x01(\v2\x1d.pinch.v1.UnblockNotificationH\x00R\x13unblockNotificationB\t\n" +
 	"\apayload\"t\n" +
 	"\x10EncryptedPayload\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12\x1e\n" +
@@ -520,7 +1142,43 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"signingKey\x12%\n" +
 	"\x0eencryption_key\x18\x03 \x01(\fR\rencryptionKey\")\n" +
 	"\tHeartbeat\x12\x1c\n" +
-	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp*\xac\x02\n" +
+	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp\"C\n" +
+	"\rAuthChallenge\x12\x14\n" +
+	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\"K\n" +
+	"\fAuthResponse\x12\x1c\n" +
+	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x02 \x01(\fR\tpublicKey\"v\n" +
+	"\n" +
+	"AuthResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12)\n" +
+	"\x10assigned_address\x18\x03 \x01(\tR\x0fassignedAddress\"\xba\x01\n" +
+	"\x11ConnectionRequest\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\tR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x02 \x01(\tR\ttoAddress\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12*\n" +
+	"\x11sender_public_key\x18\x04 \x01(\fR\x0fsenderPublicKey\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x05 \x01(\x03R\texpiresAt\"\xa4\x01\n" +
+	"\x12ConnectionResponse\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\tR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x02 \x01(\tR\ttoAddress\x12\x1a\n" +
+	"\baccepted\x18\x03 \x01(\bR\baccepted\x120\n" +
+	"\x14responder_public_key\x18\x04 \x01(\fR\x12responderPublicKey\"T\n" +
+	"\x10ConnectionRevoke\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\tR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x02 \x01(\tR\ttoAddress\"e\n" +
+	"\x11BlockNotification\x12'\n" +
+	"\x0fblocker_address\x18\x01 \x01(\tR\x0eblockerAddress\x12'\n" +
+	"\x0fblocked_address\x18\x02 \x01(\tR\x0eblockedAddress\"o\n" +
+	"\x13UnblockNotification\x12+\n" +
+	"\x11unblocker_address\x18\x01 \x01(\tR\x10unblockerAddress\x12+\n" +
+	"\x11unblocked_address\x18\x02 \x01(\tR\x10unblockedAddress*\xba\x03\n" +
 	"\vMessageType\x12\x1c\n" +
 	"\x18MESSAGE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16MESSAGE_TYPE_HANDSHAKE\x10\x01\x12\x1f\n" +
@@ -530,7 +1188,12 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"\x1dMESSAGE_TYPE_DELIVERY_CONFIRM\x10\x05\x12#\n" +
 	"\x1fMESSAGE_TYPE_CONNECTION_REQUEST\x10\x06\x12$\n" +
 	" MESSAGE_TYPE_CONNECTION_RESPONSE\x10\a\x12\x1a\n" +
-	"\x16MESSAGE_TYPE_HEARTBEAT\x10\bB\x97\x01\n" +
+	"\x16MESSAGE_TYPE_HEARTBEAT\x10\b\x12\x1c\n" +
+	"\x18MESSAGE_TYPE_AUTH_RESULT\x10\t\x12\"\n" +
+	"\x1eMESSAGE_TYPE_CONNECTION_REVOKE\x10\n" +
+	"\x12#\n" +
+	"\x1fMESSAGE_TYPE_BLOCK_NOTIFICATION\x10\v\x12%\n" +
+	"!MESSAGE_TYPE_UNBLOCK_NOTIFICATION\x10\fB\x97\x01\n" +
 	"\fcom.pinch.v1B\rEnvelopeProtoP\x01Z7github.com/pinch-protocol/pinch/gen/go/pinch/v1;pinchv1\xa2\x02\x03PXX\xaa\x02\bPinch.V1\xca\x02\bPinch\\V1\xe2\x02\x14Pinch\\V1\\GPBMetadata\xea\x02\tPinch::V1b\x06proto3"
 
 var (
@@ -546,25 +1209,41 @@ func file_pinch_v1_envelope_proto_rawDescGZIP() []byte {
 }
 
 var file_pinch_v1_envelope_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pinch_v1_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_pinch_v1_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_pinch_v1_envelope_proto_goTypes = []any{
-	(MessageType)(0),         // 0: pinch.v1.MessageType
-	(*Envelope)(nil),         // 1: pinch.v1.Envelope
-	(*EncryptedPayload)(nil), // 2: pinch.v1.EncryptedPayload
-	(*PlaintextPayload)(nil), // 3: pinch.v1.PlaintextPayload
-	(*Handshake)(nil),        // 4: pinch.v1.Handshake
-	(*Heartbeat)(nil),        // 5: pinch.v1.Heartbeat
+	(MessageType)(0),            // 0: pinch.v1.MessageType
+	(*Envelope)(nil),            // 1: pinch.v1.Envelope
+	(*EncryptedPayload)(nil),    // 2: pinch.v1.EncryptedPayload
+	(*PlaintextPayload)(nil),    // 3: pinch.v1.PlaintextPayload
+	(*Handshake)(nil),           // 4: pinch.v1.Handshake
+	(*Heartbeat)(nil),           // 5: pinch.v1.Heartbeat
+	(*AuthChallenge)(nil),       // 6: pinch.v1.AuthChallenge
+	(*AuthResponse)(nil),        // 7: pinch.v1.AuthResponse
+	(*AuthResult)(nil),          // 8: pinch.v1.AuthResult
+	(*ConnectionRequest)(nil),   // 9: pinch.v1.ConnectionRequest
+	(*ConnectionResponse)(nil),  // 10: pinch.v1.ConnectionResponse
+	(*ConnectionRevoke)(nil),    // 11: pinch.v1.ConnectionRevoke
+	(*BlockNotification)(nil),   // 12: pinch.v1.BlockNotification
+	(*UnblockNotification)(nil), // 13: pinch.v1.UnblockNotification
 }
 var file_pinch_v1_envelope_proto_depIdxs = []int32{
-	0, // 0: pinch.v1.Envelope.type:type_name -> pinch.v1.MessageType
-	2, // 1: pinch.v1.Envelope.encrypted:type_name -> pinch.v1.EncryptedPayload
-	4, // 2: pinch.v1.Envelope.handshake:type_name -> pinch.v1.Handshake
-	5, // 3: pinch.v1.Envelope.heartbeat:type_name -> pinch.v1.Heartbeat
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0,  // 0: pinch.v1.Envelope.type:type_name -> pinch.v1.MessageType
+	2,  // 1: pinch.v1.Envelope.encrypted:type_name -> pinch.v1.EncryptedPayload
+	4,  // 2: pinch.v1.Envelope.handshake:type_name -> pinch.v1.Handshake
+	5,  // 3: pinch.v1.Envelope.heartbeat:type_name -> pinch.v1.Heartbeat
+	6,  // 4: pinch.v1.Envelope.auth_challenge:type_name -> pinch.v1.AuthChallenge
+	7,  // 5: pinch.v1.Envelope.auth_response:type_name -> pinch.v1.AuthResponse
+	8,  // 6: pinch.v1.Envelope.auth_result:type_name -> pinch.v1.AuthResult
+	9,  // 7: pinch.v1.Envelope.connection_request:type_name -> pinch.v1.ConnectionRequest
+	10, // 8: pinch.v1.Envelope.connection_response:type_name -> pinch.v1.ConnectionResponse
+	11, // 9: pinch.v1.Envelope.connection_revoke:type_name -> pinch.v1.ConnectionRevoke
+	12, // 10: pinch.v1.Envelope.block_notification:type_name -> pinch.v1.BlockNotification
+	13, // 11: pinch.v1.Envelope.unblock_notification:type_name -> pinch.v1.UnblockNotification
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_pinch_v1_envelope_proto_init() }
@@ -576,6 +1255,14 @@ func file_pinch_v1_envelope_proto_init() {
 		(*Envelope_Encrypted)(nil),
 		(*Envelope_Handshake)(nil),
 		(*Envelope_Heartbeat)(nil),
+		(*Envelope_AuthChallenge)(nil),
+		(*Envelope_AuthResponse)(nil),
+		(*Envelope_AuthResult)(nil),
+		(*Envelope_ConnectionRequest)(nil),
+		(*Envelope_ConnectionResponse)(nil),
+		(*Envelope_ConnectionRevoke)(nil),
+		(*Envelope_BlockNotification)(nil),
+		(*Envelope_UnblockNotification)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -583,7 +1270,7 @@ func file_pinch_v1_envelope_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pinch_v1_envelope_proto_rawDesc), len(file_pinch_v1_envelope_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

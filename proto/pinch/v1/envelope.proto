@@ -15,6 +15,10 @@ enum MessageType {
   MESSAGE_TYPE_CONNECTION_REQUEST = 6;
   MESSAGE_TYPE_CONNECTION_RESPONSE = 7;
   MESSAGE_TYPE_HEARTBEAT = 8;
+  MESSAGE_TYPE_AUTH_RESULT = 9;
+  MESSAGE_TYPE_CONNECTION_REVOKE = 10;
+  MESSAGE_TYPE_BLOCK_NOTIFICATION = 11;
+  MESSAGE_TYPE_UNBLOCK_NOTIFICATION = 12;
 }
 
 // Envelope is the outer wire message. The relay can read this for routing
@@ -31,6 +35,14 @@ message Envelope {
     EncryptedPayload encrypted = 10;
     Handshake handshake = 11;
     Heartbeat heartbeat = 12;
+    AuthChallenge auth_challenge = 13;
+    AuthResponse auth_response = 14;
+    AuthResult auth_result = 15;
+    ConnectionRequest connection_request = 16;
+    ConnectionResponse connection_response = 17;
+    ConnectionRevoke connection_revoke = 18;
+    BlockNotification block_notification = 19;
+    UnblockNotification unblock_notification = 20;
   }
 }
 
@@ -62,4 +74,59 @@ message Handshake {
 // Heartbeat is a keep-alive message.
 message Heartbeat {
   int64 timestamp = 1;
+}
+
+// AuthChallenge is sent by the relay after WebSocket upgrade.
+// The client must sign the nonce with its Ed25519 private key.
+message AuthChallenge {
+  bytes nonce = 1;       // 32-byte random challenge
+  int64 timestamp = 2;   // server timestamp for timeout tracking
+}
+
+// AuthResponse is the client's signed response to an AuthChallenge.
+message AuthResponse {
+  bytes signature = 1;   // 64-byte Ed25519 signature of the nonce
+  bytes public_key = 2;  // 32-byte Ed25519 public key
+}
+
+// AuthResult is sent by the relay after verifying the AuthResponse.
+message AuthResult {
+  bool success = 1;
+  string error_message = 2;    // only populated on failure
+  string assigned_address = 3; // the pinch: address derived from pubkey
+}
+
+// ConnectionRequest is sent by an agent to request a connection with another agent.
+message ConnectionRequest {
+  string from_address = 1;
+  string to_address = 2;
+  string message = 3;             // free-text short message, max 280 chars enforced at application level
+  bytes sender_public_key = 4;
+  int64 expires_at = 5;           // Unix timestamp for 7-day TTL
+}
+
+// ConnectionResponse is the recipient's response to a ConnectionRequest.
+message ConnectionResponse {
+  string from_address = 1;
+  string to_address = 2;
+  bool accepted = 3;
+  bytes responder_public_key = 4; // only populated if accepted
+}
+
+// ConnectionRevoke severs a connection between two agents without blocking.
+message ConnectionRevoke {
+  string from_address = 1;
+  string to_address = 2;
+}
+
+// BlockNotification informs the relay that an agent has blocked another.
+message BlockNotification {
+  string blocker_address = 1;
+  string blocked_address = 2;
+}
+
+// UnblockNotification informs the relay that an agent has unblocked another.
+message UnblockNotification {
+  string unblocker_address = 1;
+  string unblocked_address = 2;
 }
