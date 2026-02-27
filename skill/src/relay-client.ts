@@ -7,6 +7,7 @@ import {
 	AuthResultSchema,
 	MessageType,
 } from "@pinch/proto/pinch/v1/envelope_pb.js";
+import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { Keypair } from "./identity.js";
 import { signChallenge } from "./auth.js";
 
@@ -39,6 +40,7 @@ export class RelayClient {
 	private pongTimeout: number;
 	private authTimeout: number;
 	private messageHandler: ((data: Buffer) => void) | null = null;
+	private envelopeHandler: ((envelope: Envelope) => void) | null = null;
 
 	/** The pinch: address assigned by the relay after successful auth. */
 	assignedAddress: string | null = null;
@@ -174,9 +176,20 @@ export class RelayClient {
 						this.startHeartbeat();
 						resolve();
 					} else {
-						// Post-auth messages go to the registered handler.
+						// Post-auth messages go to the registered handlers.
 						if (this.messageHandler) {
 							this.messageHandler(data);
+						}
+						if (this.envelopeHandler) {
+							try {
+								const env = fromBinary(
+									EnvelopeSchema,
+									new Uint8Array(data),
+								);
+								this.envelopeHandler(env);
+							} catch {
+								// Invalid protobuf -- skip envelope handler.
+							}
 						}
 					}
 				} catch (err) {
@@ -230,6 +243,23 @@ export class RelayClient {
 	 */
 	onMessage(handler: (data: Buffer) => void): void {
 		this.messageHandler = handler;
+	}
+
+	/**
+	 * Register a handler for deserialized protobuf Envelopes (post-auth only).
+	 * The handler receives parsed Envelope objects so downstream code
+	 * doesn't need to deal with raw bytes.
+	 */
+	onEnvelope(handler: (envelope: Envelope) => void): void {
+		this.envelopeHandler = handler;
+	}
+
+	/**
+	 * Send a serialized protobuf Envelope over the WebSocket connection.
+	 * The connection must be open and authenticated.
+	 */
+	sendEnvelope(envelope: Uint8Array): void {
+		this.send(envelope);
 	}
 
 	/**
