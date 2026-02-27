@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -13,7 +14,10 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
+	pinchv1 "github.com/pinch-protocol/pinch/gen/go/pinch/v1"
 	"github.com/pinch-protocol/pinch/relay/internal/hub"
+	"github.com/pinch-protocol/pinch/relay/internal/store"
+	"google.golang.org/protobuf/proto"
 )
 
 // newTestServer creates an httptest.Server with a chi router wired
@@ -21,7 +25,7 @@ import (
 func newTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hub) {
 	t.Helper()
 
-	h := hub.NewHub()
+	h := hub.NewHub(nil)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
@@ -332,5 +336,375 @@ func TestConcurrentRegisterUnregister(t *testing.T) {
 	// Verify routing table is clean.
 	if h.ClientCount() != 0 {
 		t.Fatalf("expected 0 clients after concurrent test, got %d", h.ClientCount())
+	}
+}
+
+// newTestServerWithBlockStore creates a test server backed by a real bbolt
+// block store for routing and block enforcement tests.
+func newTestServerWithBlockStore(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hub, *store.BlockStore) {
+	t.Helper()
+
+	dbPath := filepath.Join(t.TempDir(), "test-blocks.db")
+	bs, err := store.NewBlockStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewBlockStore: %v", err)
+	}
+	t.Cleanup(func() { bs.Close() })
+
+	h := hub.NewHub(bs)
+	go h.Run(ctx)
+
+	r := chi.NewRouter()
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		address := r.URL.Query().Get("address")
+		if address == "" {
+			http.Error(w, "missing address", http.StatusBadRequest)
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Logf("websocket accept error: %v", err)
+			return
+		}
+		client := hub.NewClient(h, conn, address, nil, ctx)
+		h.Register(client)
+		go client.ReadPump()
+		go client.WritePump()
+		go client.HeartbeatLoop()
+	})
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(func() { srv.Close() })
+	return srv, h, bs
+}
+
+// makeEnvelope creates a protobuf-serialized Envelope for testing.
+func makeEnvelope(t *testing.T, msgType pinchv1.MessageType, from, to string, payload interface{}) []byte {
+	t.Helper()
+	env := &pinchv1.Envelope{
+		Version:     1,
+		FromAddress: from,
+		ToAddress:   to,
+		Type:        msgType,
+	}
+	switch p := payload.(type) {
+	case *pinchv1.BlockNotification:
+		env.Payload = &pinchv1.Envelope_BlockNotification{BlockNotification: p}
+	case *pinchv1.UnblockNotification:
+		env.Payload = &pinchv1.Envelope_UnblockNotification{UnblockNotification: p}
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+	return data
+}
+
+func TestRouteMessageDeliversToRecipient(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+
+	// Connect alice and bob.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Alice sends a message to Bob.
+	msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Bob should receive the message.
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	_, data, err := bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read: %v", err)
+	}
+
+	var received pinchv1.Envelope
+	if err := proto.Unmarshal(data, &received); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if received.FromAddress != "pinch:alice@localhost" {
+		t.Fatalf("expected from alice, got %s", received.FromAddress)
+	}
+	if received.ToAddress != "pinch:bob@localhost" {
+		t.Fatalf("expected to bob, got %s", received.ToAddress)
+	}
+}
+
+func TestRouteMessageSilentDropOfflineRecipient(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newTestServerWithBlockStore(t, ctx)
+
+	// Connect only alice.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+
+	// Alice sends a message to offline bob -- should not error.
+	msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Give time for routing (message should be silently dropped).
+	time.Sleep(100 * time.Millisecond)
+
+	// Alice should not receive any error indication -- connection stays open.
+	if h.ClientCount() != 1 {
+		t.Fatal("expected alice to remain connected")
+	}
+}
+
+func TestRouteMessageBlockedSenderSilentDrop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, bs := newTestServerWithBlockStore(t, ctx)
+
+	// Connect alice and bob.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Bob blocks Alice at the store level.
+	if err := bs.Block("pinch:bob@localhost", "pinch:alice@localhost"); err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+
+	// Alice sends a message to Bob -- should be silently dropped.
+	msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Bob should NOT receive the message.
+	readCtx, readCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	_, _, err = bobConn.Read(readCtx)
+	readCancel()
+	if err == nil {
+		t.Fatal("expected bob to NOT receive a message from blocked alice")
+	}
+
+	// Alice should still be connected (no error indication).
+	if h.ClientCount() != 2 {
+		t.Fatal("expected both clients to remain connected")
+	}
+}
+
+func TestBlockNotificationUpdatesBlockStore(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, bs := newTestServerWithBlockStore(t, ctx)
+
+	// Connect bob.
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+
+	// Verify alice is not blocked initially.
+	if bs.IsBlocked("pinch:bob@localhost", "pinch:alice@localhost") {
+		t.Fatal("expected alice to not be blocked initially")
+	}
+
+	// Bob sends a BlockNotification.
+	blockMsg := makeEnvelope(t,
+		pinchv1.MessageType_MESSAGE_TYPE_BLOCK_NOTIFICATION,
+		"pinch:bob@localhost", "",
+		&pinchv1.BlockNotification{
+			BlockerAddress: "pinch:bob@localhost",
+			BlockedAddress: "pinch:alice@localhost",
+		},
+	)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = bobConn.Write(writeCtx, websocket.MessageBinary, blockMsg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write block notification: %v", err)
+	}
+
+	// Wait for the message to be processed.
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify alice is now blocked by bob.
+	if !bs.IsBlocked("pinch:bob@localhost", "pinch:alice@localhost") {
+		t.Fatal("expected alice to be blocked after BlockNotification")
+	}
+}
+
+func TestUnblockNotificationRestoresDelivery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, bs := newTestServerWithBlockStore(t, ctx)
+
+	// Connect alice and bob.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Bob blocks Alice.
+	if err := bs.Block("pinch:bob@localhost", "pinch:alice@localhost"); err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+
+	// Bob sends an UnblockNotification via WebSocket.
+	unblockMsg := makeEnvelope(t,
+		pinchv1.MessageType_MESSAGE_TYPE_UNBLOCK_NOTIFICATION,
+		"pinch:bob@localhost", "",
+		&pinchv1.UnblockNotification{
+			UnblockerAddress: "pinch:bob@localhost",
+			UnblockedAddress: "pinch:alice@localhost",
+		},
+	)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = bobConn.Write(writeCtx, websocket.MessageBinary, unblockMsg)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write unblock: %v", err)
+	}
+
+	// Wait for unblock to be processed.
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify alice is no longer blocked.
+	if bs.IsBlocked("pinch:bob@localhost", "pinch:alice@localhost") {
+		t.Fatal("expected alice to be unblocked after UnblockNotification")
+	}
+
+	// Alice sends a message to Bob -- should now be delivered.
+	msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+	writeCtx2, writeCancel2 := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx2, websocket.MessageBinary, msg)
+	writeCancel2()
+	if err != nil {
+		t.Fatalf("write msg: %v", err)
+	}
+
+	// Bob should receive the message.
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	_, data, err := bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read after unblock: %v", err)
+	}
+
+	var received pinchv1.Envelope
+	if err := proto.Unmarshal(data, &received); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if received.FromAddress != "pinch:alice@localhost" {
+		t.Fatalf("expected from alice, got %s", received.FromAddress)
+	}
+}
+
+func TestBlockedSenderReceivesNoErrorIndication(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, bs := newTestServerWithBlockStore(t, ctx)
+
+	// Connect alice and bob.
+	aliceConn, err := dialWS(ctx, srv, "pinch:alice@localhost")
+	if err != nil {
+		t.Fatalf("dial alice: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobConn, err := dialWS(ctx, srv, "pinch:bob@localhost")
+	if err != nil {
+		t.Fatalf("dial bob: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Bob blocks Alice.
+	if err := bs.Block("pinch:bob@localhost", "pinch:alice@localhost"); err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+
+	// Alice sends multiple messages -- all should be silently dropped.
+	for i := 0; i < 3; i++ {
+		msg := makeEnvelope(t, pinchv1.MessageType_MESSAGE_TYPE_MESSAGE, "pinch:alice@localhost", "pinch:bob@localhost", nil)
+		writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+		err = aliceConn.Write(writeCtx, websocket.MessageBinary, msg)
+		writeCancel()
+		if err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+
+	// Wait for processing.
+	time.Sleep(200 * time.Millisecond)
+
+	// Alice should still be connected -- no disconnection, no error messages.
+	if h.ClientCount() != 2 {
+		t.Fatal("expected both clients to remain connected after blocked sends")
+	}
+
+	// Alice should not receive any error/notification back.
+	readCtx, readCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	_, _, err = aliceConn.Read(readCtx)
+	readCancel()
+	if err == nil {
+		t.Fatal("expected alice to NOT receive any response (silent drop)")
 	}
 }

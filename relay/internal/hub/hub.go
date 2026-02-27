@@ -8,6 +8,10 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+
+	pinchv1 "github.com/pinch-protocol/pinch/gen/go/pinch/v1"
+	"github.com/pinch-protocol/pinch/relay/internal/store"
+	"google.golang.org/protobuf/proto"
 )
 
 // Hub maintains the set of active clients and routes messages between them.
@@ -22,16 +26,22 @@ type Hub struct {
 	// unregister receives clients to remove from the routing table.
 	unregister chan *Client
 
+	// blockStore persists block relationships. Can be nil for tests that
+	// don't need blocking.
+	blockStore *store.BlockStore
+
 	// mu protects external reads of the routing table (e.g., health checks).
 	mu sync.RWMutex
 }
 
 // NewHub creates a new Hub with initialized channels and routing table.
-func NewHub() *Hub {
+// blockStore may be nil if block enforcement is not needed (e.g., tests).
+func NewHub(blockStore *store.BlockStore) *Hub {
 	return &Hub{
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		blockStore: blockStore,
 	}
 }
 
@@ -103,4 +113,66 @@ func (h *Hub) Register(client *Client) {
 // Unregister queues a client for removal from the hub.
 func (h *Hub) Unregister(client *Client) {
 	h.unregister <- client
+}
+
+// RouteMessage deserializes an envelope, handles block/unblock commands,
+// checks blocks, and delivers the message to the recipient.
+// Blocked and undeliverable messages are silently dropped.
+func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
+	var env pinchv1.Envelope
+	if err := proto.Unmarshal(envelope, &env); err != nil {
+		slog.Debug("route: invalid protobuf",
+			"from", from.Address(),
+			"error", err,
+		)
+		return err
+	}
+
+	switch env.Type {
+	case pinchv1.MessageType_MESSAGE_TYPE_BLOCK_NOTIFICATION:
+		bn := env.GetBlockNotification()
+		if bn == nil {
+			return nil
+		}
+		if h.blockStore != nil {
+			// Blocker is the authenticated sender -- ignore blocker_address
+			// field in payload and use the verified address.
+			return h.blockStore.Block(from.Address(), bn.BlockedAddress)
+		}
+		return nil
+
+	case pinchv1.MessageType_MESSAGE_TYPE_UNBLOCK_NOTIFICATION:
+		un := env.GetUnblockNotification()
+		if un == nil {
+			return nil
+		}
+		if h.blockStore != nil {
+			return h.blockStore.Unblock(from.Address(), un.UnblockedAddress)
+		}
+		return nil
+	}
+
+	// For all other message types: check block list before delivery.
+	toAddress := env.ToAddress
+	if toAddress == "" {
+		return nil
+	}
+
+	if h.blockStore != nil && h.blockStore.IsBlocked(toAddress, from.Address()) {
+		// Silent drop -- no error to sender.
+		slog.Debug("route: message blocked",
+			"from", from.Address(),
+			"to", toAddress,
+		)
+		return nil
+	}
+
+	recipient, ok := h.LookupClient(toAddress)
+	if !ok {
+		// Recipient offline -- silent drop (indistinguishable from blocked).
+		return nil
+	}
+
+	recipient.Send(envelope)
+	return nil
 }

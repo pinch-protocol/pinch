@@ -57,10 +57,8 @@ func NewClient(hub *Hub, conn *websocket.Conn, address string, pubKey ed25519.Pu
 	}
 }
 
-// ReadPump reads messages from the WebSocket connection.
-// For Phase 1, received messages are discarded -- this goroutine
-// exists to detect disconnection and keep the connection alive.
-// When ReadPump exits, the client is unregistered from the hub.
+// ReadPump reads messages from the WebSocket connection and routes them
+// through the hub. When ReadPump exits, the client is unregistered.
 func (c *Client) ReadPump() {
 	defer func() {
 		c.hub.Unregister(c)
@@ -68,7 +66,7 @@ func (c *Client) ReadPump() {
 
 	for {
 		readCtx, readCancel := context.WithTimeout(c.ctx, readTimeout)
-		_, _, err := c.conn.Read(readCtx)
+		_, data, err := c.conn.Read(readCtx)
 		readCancel()
 		if err != nil {
 			if c.ctx.Err() == nil {
@@ -79,7 +77,12 @@ func (c *Client) ReadPump() {
 			}
 			return
 		}
-		// Phase 1: discard received messages (no routing yet)
+		if err := c.hub.RouteMessage(c, data); err != nil {
+			slog.Debug("route error",
+				"address", c.address,
+				"error", err,
+			)
+		}
 	}
 }
 
@@ -136,6 +139,18 @@ func (c *Client) HeartbeatLoop() {
 				return
 			}
 		}
+	}
+}
+
+// Send writes data to the client's outbound channel. If the channel
+// is full, the message is dropped to prevent blocking the sender.
+func (c *Client) Send(data []byte) {
+	select {
+	case c.send <- data:
+	default:
+		slog.Debug("send buffer full, dropping message",
+			"address", c.address,
+		)
 	}
 }
 

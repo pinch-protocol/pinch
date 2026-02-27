@@ -18,6 +18,7 @@ import (
 	pinchv1 "github.com/pinch-protocol/pinch/gen/go/pinch/v1"
 	"github.com/pinch-protocol/pinch/relay/internal/auth"
 	"github.com/pinch-protocol/pinch/relay/internal/hub"
+	"github.com/pinch-protocol/pinch/relay/internal/store"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -32,10 +33,22 @@ func main() {
 		relayHost = "localhost"
 	}
 
+	dbPath := os.Getenv("PINCH_RELAY_DB")
+	if dbPath == "" {
+		dbPath = "./pinch-relay.db"
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	h := hub.NewHub()
+	blockStore, err := store.NewBlockStore(dbPath)
+	if err != nil {
+		slog.Error("failed to open block store", "path", dbPath, "error", err)
+		os.Exit(1)
+	}
+	defer blockStore.Close()
+
+	h := hub.NewHub(blockStore)
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
