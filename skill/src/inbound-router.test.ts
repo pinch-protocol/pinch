@@ -6,6 +6,26 @@ import { MessageStore } from "./message-store.js";
 import { ConnectionStore } from "./connection-store.js";
 import { InboundRouter } from "./inbound-router.js";
 import type { MessageRecord } from "./message-store.js";
+import type { ActivityFeed, ActivityEvent } from "./autonomy/activity-feed.js";
+
+/** Create a mock ActivityFeed that tracks record() calls. */
+function createMockActivityFeed() {
+	const recorded: Omit<ActivityEvent, "id" | "createdAt">[] = [];
+	const mock: ActivityFeed = {
+		record(event: Omit<ActivityEvent, "id" | "createdAt">) {
+			recorded.push(event);
+			return {
+				id: "mock-id",
+				createdAt: new Date().toISOString(),
+				...event,
+			} as ActivityEvent;
+		},
+		getEvents() {
+			return [];
+		},
+	} as unknown as ActivityFeed;
+	return { mock, recorded };
+}
 
 /** Create a test message record in the store. */
 function createTestMessage(
@@ -34,6 +54,7 @@ describe("InboundRouter", () => {
 	let tempDir: string;
 	let messageStore: MessageStore;
 	let connectionStore: ConnectionStore;
+	let mockFeed: ReturnType<typeof createMockActivityFeed>;
 	let router: InboundRouter;
 
 	beforeEach(async () => {
@@ -43,7 +64,8 @@ describe("InboundRouter", () => {
 			join(tempDir, "connections.json"),
 		);
 		await connectionStore.load();
-		router = new InboundRouter(connectionStore, messageStore);
+		mockFeed = createMockActivityFeed();
+		router = new InboundRouter(connectionStore, messageStore, mockFeed.mock);
 	});
 
 	afterEach(() => {
@@ -97,6 +119,57 @@ describe("InboundRouter", () => {
 			expect(stored!.state).toBe("read_by_agent");
 		});
 
+		it("Notify connection routes message to read_by_agent AND records activity feed entry", () => {
+			connectionStore.addConnection({
+				peerAddress: "pinch:bob@localhost",
+				peerPublicKey: "",
+				state: "active",
+				nickname: "Bob",
+				autonomyLevel: "notify",
+			});
+
+			const msg = createTestMessage(messageStore, {
+				connectionAddress: "pinch:bob@localhost",
+			});
+
+			const result = router.route(msg, "pinch:bob@localhost");
+
+			expect(result.state).toBe("read_by_agent");
+
+			// Verify state was persisted
+			const stored = messageStore.getMessage(msg.id);
+			expect(stored!.state).toBe("read_by_agent");
+
+			// Verify activity feed was called
+			expect(mockFeed.recorded).toHaveLength(1);
+			expect(mockFeed.recorded[0].eventType).toBe("message_processed_autonomously");
+			expect(mockFeed.recorded[0].badge).toBe("processed_autonomously");
+			expect(mockFeed.recorded[0].messageId).toBe(msg.id);
+			expect(mockFeed.recorded[0].connectionAddress).toBe("pinch:bob@localhost");
+		});
+
+		it("Auto-respond connection routes message to pending_policy_eval state", () => {
+			connectionStore.addConnection({
+				peerAddress: "pinch:bob@localhost",
+				peerPublicKey: "",
+				state: "active",
+				nickname: "Bob",
+				autonomyLevel: "auto_respond",
+			});
+
+			const msg = createTestMessage(messageStore, {
+				connectionAddress: "pinch:bob@localhost",
+			});
+
+			const result = router.route(msg, "pinch:bob@localhost");
+
+			expect(result.state).toBe("pending_policy_eval");
+
+			// Verify state was persisted
+			const stored = messageStore.getMessage(msg.id);
+			expect(stored!.state).toBe("pending_policy_eval");
+		});
+
 		it("Unknown sender gets failed state with failure reason", () => {
 			const msg = createTestMessage(messageStore, {
 				connectionAddress: "pinch:unknown@localhost",
@@ -113,6 +186,28 @@ describe("InboundRouter", () => {
 			expect(stored!.state).toBe("failed");
 			expect(stored!.failureReason).toBeDefined();
 		});
+
+		it("Unknown autonomy level defaults to escalated_to_human (safety fallback)", () => {
+			connectionStore.addConnection({
+				peerAddress: "pinch:bob@localhost",
+				peerPublicKey: "",
+				state: "active",
+				nickname: "Bob",
+				autonomyLevel: "full_manual",
+			});
+
+			// Force an unknown autonomy level for testing
+			const conn = connectionStore.getConnection("pinch:bob@localhost")!;
+			(conn as Record<string, unknown>).autonomyLevel = "unknown_level";
+
+			const msg = createTestMessage(messageStore, {
+				connectionAddress: "pinch:bob@localhost",
+			});
+
+			const result = router.route(msg, "pinch:bob@localhost");
+
+			expect(result.state).toBe("escalated_to_human");
+		});
 	});
 
 	describe("getPendingForReview", () => {
@@ -126,14 +221,14 @@ describe("InboundRouter", () => {
 			});
 
 			// Create messages with explicit timestamps for ordering
-			const msg1 = createTestMessage(messageStore, {
+			createTestMessage(messageStore, {
 				id: "msg-older",
 				connectionAddress: "pinch:bob@localhost",
 				state: "escalated_to_human",
 				createdAt: "2026-01-01T00:00:00Z",
 				updatedAt: "2026-01-01T00:00:00Z",
 			});
-			const msg2 = createTestMessage(messageStore, {
+			createTestMessage(messageStore, {
 				id: "msg-newer",
 				connectionAddress: "pinch:bob@localhost",
 				state: "escalated_to_human",
@@ -156,9 +251,41 @@ describe("InboundRouter", () => {
 		});
 	});
 
+	describe("getPendingPolicyEval", () => {
+		it("returns only pending_policy_eval messages, ordered by created_at ASC", () => {
+			createTestMessage(messageStore, {
+				id: "msg-eval-older",
+				connectionAddress: "pinch:bob@localhost",
+				state: "pending_policy_eval",
+				createdAt: "2026-01-01T00:00:00Z",
+				updatedAt: "2026-01-01T00:00:00Z",
+			});
+			createTestMessage(messageStore, {
+				id: "msg-eval-newer",
+				connectionAddress: "pinch:bob@localhost",
+				state: "pending_policy_eval",
+				createdAt: "2026-01-02T00:00:00Z",
+				updatedAt: "2026-01-02T00:00:00Z",
+			});
+			// This one should NOT appear (different state)
+			createTestMessage(messageStore, {
+				id: "msg-other",
+				connectionAddress: "pinch:bob@localhost",
+				state: "read_by_agent",
+			});
+
+			const pending = router.getPendingPolicyEval();
+
+			expect(pending).toHaveLength(2);
+			// ASC order: older first
+			expect(pending[0].id).toBe("msg-eval-older");
+			expect(pending[1].id).toBe("msg-eval-newer");
+		});
+	});
+
 	describe("approveMessage", () => {
 		it("with 'agent_handle' transitions from escalated_to_human to read_by_agent", () => {
-			const msg = createTestMessage(messageStore, {
+			createTestMessage(messageStore, {
 				id: "approve-test-1",
 				state: "escalated_to_human",
 			});
@@ -176,7 +303,7 @@ describe("InboundRouter", () => {
 		});
 
 		it("with 'human_respond' transitions from escalated_to_human to delivered", () => {
-			const msg = createTestMessage(messageStore, {
+			createTestMessage(messageStore, {
 				id: "approve-test-2",
 				state: "escalated_to_human",
 			});
@@ -194,7 +321,7 @@ describe("InboundRouter", () => {
 		});
 
 		it("returns undefined for non-escalated message", () => {
-			const msg = createTestMessage(messageStore, {
+			createTestMessage(messageStore, {
 				id: "approve-test-3",
 				state: "delivered",
 			});

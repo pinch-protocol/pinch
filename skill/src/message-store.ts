@@ -53,6 +53,13 @@ export class MessageStore {
 	}
 
 	/**
+	 * Expose the underlying SQLite database for shared use (e.g., ActivityFeed).
+	 */
+	getDb(): DatabaseType {
+		return this.db;
+	}
+
+	/**
 	 * Create tables and indexes if they do not already exist.
 	 */
 	private initSchema(): void {

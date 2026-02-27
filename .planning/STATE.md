@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Agents can securely message each other with human consent and oversight at every step -- no message flows without explicit human approval of the connection.
-**Current focus:** Phase 4 complete -- Store-and-Forward fully wired. Ready for Phase 5.
+**Current focus:** Phase 5 complete. Full autonomy system with circuit breakers and enforcement pipeline.
 
 ## Current Position
 
-Phase: 4 of 6 (Store-and-Forward) -- COMPLETE
-Plan: 2 of 2 in current phase (complete)
+Phase: 5 of 6 (Full Autonomy and Permissions) -- COMPLETE
+Plan: 3 of 3 in current phase (complete)
 Status: Phase Complete
-Last activity: 2026-02-27 -- Completed 04-02-PLAN.md
+Last activity: 2026-02-27 -- Completed 05-03-PLAN.md
 
-Progress: [█████████░] 90%
+Progress: [████████████████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 16
 - Average duration: 6min
-- Total execution time: 1.4 hours
+- Total execution time: 1.7 hours
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Progress: [█████████░] 90%
 | 02 | 4 | 24min | 6min |
 | 03 | 4 | 23min | 6min |
 | 04 | 2 | 15min | 8min |
+| 05 | 3 | 15min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (5min), 03-04 (4min), 04-01 (5min), 04-02 (10min)
+- Last 5 plans: 04-02 (10min), 05-01 (6min), 05-02 (4min), 05-03 (5min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -47,6 +48,9 @@ Progress: [█████████░] 90%
 | Phase 03 P04 | 4min | 2 tasks | 13 files |
 | Phase 04 P01 | 5min | 2 tasks | 10 files |
 | Phase 04 P02 | 10min | 2 tasks | 7 files |
+| Phase 05 P01 | 6min | 2 tasks | 12 files |
+| Phase 05 P02 | 4min | 2 tasks | 11 files |
+| Phase 05 P03 | 5min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -102,6 +106,18 @@ Recent decisions affecting current work:
 - [04-02]: Flushing flag uses sync/atomic for lock-free reads on hot routing path
 - [04-02]: Messages during flush enqueued to bbolt (not real-time) to preserve chronological ordering
 - [04-02]: PINCH_RELAY_QUEUE_MAX and PINCH_RELAY_QUEUE_TTL env vars for configurable queue settings
+- [05-01]: ActivityFeed shares SQLite database via MessageStore.getDb() accessor (type-safe shared access)
+- [05-01]: InboundRouter activityFeed parameter is optional (3rd param) for backward compatibility
+- [05-01]: Confirmation gate for full_auto applies from any level (not just full_manual)
+- [05-01]: circuitBreakerTripped cleared on any setAutonomy call (human manual override)
+- [05-02]: Deny-all manifest assigned to new connections via defaultPermissionsManifest() in addConnection()
+- [05-02]: Plain text messages pass structural check in v1 (future phases add structured action types)
+- [05-02]: Custom category check reuses checkInformationBoundary with category description as boundary
+- [05-02]: LLM failure or uncertainty always escalates to human (safe default per research pitfall 5)
+- [05-03]: EnforcementPipeline is the single entry point for all inbound message processing after decryption
+- [05-03]: Circuit breaker uses updateConnection() for downgrade to avoid setAutonomy() confirmation gate
+- [05-03]: Auto-respond policy evaluation logs every decision to activity feed regardless of outcome
+- [05-03]: Circuit breaker trip calls connectionStore.save() as fire-and-forget for persistence
 
 ### Pending Todos
 
@@ -114,5 +130,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 04-02-PLAN.md (Phase 4 complete)
+Stopped at: Completed 05-03-PLAN.md (Phase 5 complete)
 Resume file: None

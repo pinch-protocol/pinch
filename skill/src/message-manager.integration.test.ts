@@ -24,6 +24,11 @@ import { ConnectionManager } from "./connection.js";
 import { MessageStore } from "./message-store.js";
 import { MessageManager } from "./message-manager.js";
 import { InboundRouter } from "./inbound-router.js";
+import { ActivityFeed } from "./autonomy/activity-feed.js";
+import { PermissionsEnforcer } from "./autonomy/permissions-enforcer.js";
+import { NoOpPolicyEvaluator } from "./autonomy/policy-evaluator.js";
+import { CircuitBreaker } from "./autonomy/circuit-breaker.js";
+import { EnforcementPipeline } from "./autonomy/enforcement-pipeline.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..", "..");
@@ -96,7 +101,20 @@ async function createAgent(name: string): Promise<Agent> {
 	const msgDbPath = join(tempDir, `${name}-messages.db`);
 	const messageStore = new MessageStore(msgDbPath);
 
-	const inboundRouter = new InboundRouter(connectionStore, messageStore);
+	const activityFeed = new ActivityFeed(messageStore.getDb());
+	const policyEvaluator = new NoOpPolicyEvaluator();
+	const permissionsEnforcer = new PermissionsEnforcer(connectionStore, policyEvaluator);
+	const circuitBreaker = new CircuitBreaker(connectionStore, activityFeed);
+	const inboundRouter = new InboundRouter(connectionStore, messageStore, activityFeed);
+	const enforcementPipeline = new EnforcementPipeline(
+		permissionsEnforcer,
+		circuitBreaker,
+		inboundRouter,
+		policyEvaluator,
+		connectionStore,
+		messageStore,
+		activityFeed,
+	);
 	const connectionManager = new ConnectionManager(
 		client,
 		connectionStore,
@@ -107,7 +125,7 @@ async function createAgent(name: string): Promise<Agent> {
 		connectionStore,
 		messageStore,
 		keypair,
-		inboundRouter,
+		enforcementPipeline,
 	);
 
 	await client.connect();

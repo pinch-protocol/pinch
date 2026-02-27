@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Authentication and Connection** - Challenge-response auth, connection request lifecycle, blocking, baseline autonomy (Full Manual + Full Auto) (completed 2026-02-27)
 - [x] **Phase 3: Encrypted 1:1 Messaging** - NaCl box E2E encryption, real-time message delivery, OpenClaw skill integration (completed 2026-02-27)
 - [ ] **Phase 4: Store-and-Forward** - bbolt message queue at relay, TTL expiration, reconnect flush, delivery confirmations
-- [ ] **Phase 5: Full Autonomy and Permissions** - 4-tier autonomy state machine, inbound permissions manifest, autonomy change controls
+- [x] **Phase 5: Full Autonomy and Permissions** - 4-tier autonomy state machine, inbound permissions manifest, autonomy change controls (completed 2026-02-27)
 - [ ] **Phase 6: Oversight and Safety** - Activity feed, human intervention, audit log with hash chaining, rate limiting, circuit breakers, muting
 
 ## Phase Details
@@ -95,11 +95,12 @@ Plans:
   2. Human can change the autonomy level for any connection at any time; the change takes effect immediately
   3. Inbound permissions manifest defines what message types and actions a connection can send; permissions are enforced before decrypted content reaches the LLM
   4. Circuit breakers auto-downgrade a connection's autonomy level when anomalous behavior is detected (e.g., message flood, unexpected action types)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md -- Extend autonomy to 4 tiers, InboundRouter 4-branch routing, ActivityFeed, pinch-autonomy tool
+- [ ] 05-02-PLAN.md -- PermissionsManifest with domain-specific capability tiers, PermissionsEnforcer, PolicyEvaluator interface, pinch-permissions tool
+- [ ] 05-03-PLAN.md -- CircuitBreaker with sliding window counters, EnforcementPipeline wiring, bootstrap update, SKILL.md/HEARTBEAT.md updates
 
 ### Phase 6: Oversight and Safety
 **Goal**: Humans have full visibility into agent communication via an activity feed and audit log, can intervene in conversations, and the system is protected by rate limiting and circuit breakers
@@ -127,6 +128,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation and Crypto Primitives | 3/3 | Complete    | 2026-02-27 |
 | 2. Authentication and Connection | 4/4 | Complete    | 2026-02-27 |
 | 3. Encrypted 1:1 Messaging | 1/4 | Complete    | 2026-02-27 |
-| 4. Store-and-Forward | 1/2 | In Progress | - |
-| 5. Full Autonomy and Permissions | 0/2 | Not started | - |
+| 4. Store-and-Forward | 2/2 | Complete    | 2026-02-27 |
+| 5. Full Autonomy and Permissions | 0/3 | Complete    | 2026-02-27 |
 | 6. Oversight and Safety | 0/2 | Not started | - |

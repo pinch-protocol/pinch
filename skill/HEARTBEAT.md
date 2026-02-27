@@ -29,6 +29,13 @@ pinch-history --limit 100
 pinch-status --id <message_id>
 ```
 
+## Circuit Breaker and Autonomy Monitoring
+
+- [ ] Check for circuit breaker events in the activity feed
+- [ ] Review connections with warning badges (circuitBreakerTripped = true)
+- [ ] Check for pending_policy_eval messages (Auto-respond awaiting evaluation)
+- [ ] Review auto_respond_decision events in the activity feed for unexpected denials or escalations
+
 ## Connection Requests
 
 - [ ] Check for pending inbound connection requests

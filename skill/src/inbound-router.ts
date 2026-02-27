@@ -1,17 +1,19 @@
 /**
  * InboundRouter routes incoming messages based on connection autonomy level.
  *
- * Autonomy levels control how inbound messages are processed:
+ * 4-tier autonomy levels control how inbound messages are processed:
  * - full_manual: Message state set to "escalated_to_human" (human reviews)
+ * - notify: Message state set to "read_by_agent" + activity feed entry
+ * - auto_respond: Message state set to "pending_policy_eval" (deferred to PolicyEvaluator)
  * - full_auto: Message state set to "read_by_agent" (agent processes directly)
  *
  * State names follow the locked decision in CONTEXT.md:
- * sent, relayed, delivered, read_by_agent, escalated_to_human, failed.
- * The "relayed" state is deferred to Phase 4 when the relay can send acks.
+ * sent, relayed, delivered, read_by_agent, escalated_to_human, pending_policy_eval, failed.
  */
 
 import type { ConnectionStore } from "./connection-store.js";
 import type { MessageStore, MessageRecord } from "./message-store.js";
+import type { ActivityFeed } from "./autonomy/activity-feed.js";
 
 /** Result of routing an inbound message. */
 export interface RoutedMessage {
@@ -34,6 +36,7 @@ export class InboundRouter {
 	constructor(
 		private connectionStore: ConnectionStore,
 		private messageStore: MessageStore,
+		private activityFeed?: ActivityFeed,
 	) {}
 
 	/**
@@ -67,21 +70,36 @@ export class InboundRouter {
 			};
 		}
 
-		if (connection.autonomyLevel === "full_auto") {
-			this.messageStore.updateState(message.id, "read_by_agent");
-			return {
-				messageId: message.id,
-				senderAddress: connectionAddress,
-				body: message.body,
-				threadId: message.threadId,
-				replyTo: message.replyTo,
-				priority: message.priority,
-				state: "read_by_agent",
-			};
+		let state: string;
+
+		switch (connection.autonomyLevel) {
+			case "full_auto":
+				state = "read_by_agent";
+				break;
+
+			case "notify":
+				state = "read_by_agent";
+				// Record activity feed entry for human visibility
+				this.activityFeed?.record({
+					connectionAddress,
+					eventType: "message_processed_autonomously",
+					messageId: message.id,
+					badge: "processed_autonomously",
+				});
+				break;
+
+			case "auto_respond":
+				state = "pending_policy_eval";
+				break;
+
+			case "full_manual":
+			default:
+				// full_manual or any unknown level -> escalated_to_human (safety fallback)
+				state = "escalated_to_human";
+				break;
 		}
 
-		// full_manual or any future unrecognized level -> escalated_to_human
-		this.messageStore.updateState(message.id, "escalated_to_human");
+		this.messageStore.updateState(message.id, state);
 		return {
 			messageId: message.id,
 			senderAddress: connectionAddress,
@@ -89,7 +107,7 @@ export class InboundRouter {
 			threadId: message.threadId,
 			replyTo: message.replyTo,
 			priority: message.priority,
-			state: "escalated_to_human",
+			state,
 		};
 	}
 
@@ -101,6 +119,18 @@ export class InboundRouter {
 	getPendingForReview(): MessageRecord[] {
 		return this.messageStore.getHistory({
 			state: "escalated_to_human",
+			limit: 1000,
+		}).reverse(); // getHistory returns DESC, we need ASC
+	}
+
+	/**
+	 * Get messages pending policy evaluation (state = "pending_policy_eval"),
+	 * ordered by created_at ASC (oldest first).
+	 * Consumed by Plan 02's PolicyEvaluator.
+	 */
+	getPendingPolicyEval(): MessageRecord[] {
+		return this.messageStore.getHistory({
+			state: "pending_policy_eval",
 			limit: 1000,
 		}).reverse(); // getHistory returns DESC, we need ASC
 	}

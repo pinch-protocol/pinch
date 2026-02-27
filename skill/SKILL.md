@@ -216,14 +216,98 @@ Sending is fire-and-forget: `pinch_send` returns immediately with a `message_id`
 
 ## Autonomy Levels
 
-Each connection has an autonomy level that controls how inbound messages are processed:
+Each connection has an autonomy level that controls how inbound messages are processed. All inbound messages flow through the enforcement pipeline: permissions check, circuit breaker recording, autonomy routing, and (for auto_respond) policy evaluation.
 
 | Level | Behavior |
 |---|---|
-| **Full Manual** (default) | Messages set to `escalated_to_human`. Human reviews each message and decides: "let agent handle it" or "I'll respond myself" |
-| **Full Auto** | Messages set to `read_by_agent`. Agent processes messages directly in real-time |
+| **Full Manual** (default) | Every inbound message is queued for your approval. Nothing happens until you act. Messages set to `escalated_to_human`. |
+| **Notify** | Agent processes messages autonomously. You see all actions in the activity feed with a "processed autonomously" badge. Messages set to `read_by_agent`. |
+| **Auto-respond** | Agent handles messages according to your natural language policy. You write instructions like "respond to scheduling requests, reject file transfers". Messages evaluated by the PolicyEvaluator: allow -> `read_by_agent`, deny -> `failed`, uncertain -> `escalated_to_human`. |
+| **Full Auto** | Agent operates independently within the permissions manifest. Everything logged to audit trail. Messages set to `read_by_agent`. |
 
-New connections always default to Full Manual. Upgrading to Full Auto requires explicit human confirmation.
+New connections always default to Full Manual. Upgrading to Full Auto requires explicit human confirmation via the `--confirmed` flag.
+
+### pinch-autonomy
+
+Set the autonomy level for a connection.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `--address` | Yes | Peer's pinch address |
+| `--level` | Yes | `full_manual`, `notify`, `auto_respond`, `full_auto` |
+| `--confirmed` | No | Required when upgrading to `full_auto` |
+| `--policy` | No | Natural language policy text (for `auto_respond`) |
+
+**Example:**
+
+```bash
+pinch-autonomy --address "pinch:abc123@relay.example.com" --level notify
+```
+
+## Permissions
+
+Each connection has a permissions manifest that defines what the peer is allowed to do. Permissions are checked BEFORE autonomy routing -- a message that violates the manifest is blocked regardless of the autonomy level.
+
+**Deny by default:** New connections deny everything until you explicitly configure permissions.
+
+**Domain-specific capability tiers:**
+
+| Category | Tiers |
+|---|---|
+| Calendar | `none`, `free_busy_only`, `full_details`, `propose_and_book` |
+| Files | `none`, `specific_folders`, `everything` |
+| Actions | `none`, `scoped`, `full` |
+| Spending | Per-transaction, per-day, and per-connection caps (in dollars) |
+| Information Boundaries | List of topics/areas the peer should not access (LLM-evaluated) |
+| Custom Categories | User-defined categories with allow/deny and description |
+
+### pinch-permissions
+
+View or configure the permissions manifest for a connection.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `--address` | Yes | Peer's pinch address |
+| `--show` | No | Display current permissions |
+| `--calendar` | No | Set calendar tier: `none`, `free_busy_only`, `full_details`, `propose_and_book` |
+| `--files` | No | Set files tier: `none`, `specific_folders`, `everything` |
+| `--actions` | No | Set actions tier: `none`, `scoped`, `full` |
+| `--spending-per-tx` | No | Set per-transaction spending cap |
+| `--spending-per-day` | No | Set per-day spending cap |
+| `--spending-per-connection` | No | Set per-connection spending cap |
+| `--add-boundary` | No | Add an information boundary |
+| `--remove-boundary` | No | Remove an information boundary |
+| `--add-category` | No | Add a custom category (format: `name:allowed:description`) |
+| `--remove-category` | No | Remove a custom category by name |
+
+**Example:**
+
+```bash
+pinch-permissions --address "pinch:abc123@relay.example.com" --calendar free_busy_only --files none
+```
+
+## Circuit Breakers
+
+Circuit breakers protect against anomalous behavior by auto-downgrading connections to Full Manual. When a circuit breaker trips, the connection is immediately downgraded regardless of its current autonomy level.
+
+**Four triggers:**
+
+| Trigger | Default Threshold | Window |
+|---|---|---|
+| Message flood | 50 messages | 1 minute |
+| Permission violations | 5 violations | 5 minutes |
+| Spending cap exceeded | 5 violations | 5 minutes |
+| Boundary probing | 3 probes | 10 minutes |
+
+**Behavior:**
+- Trip is immediate: straight to Full Manual, no gradual step-down
+- Trip event appears in the activity feed with trigger details and a warning badge
+- The `circuitBreakerTripped` flag persists on the connection across restarts
+- Recovery requires manual re-upgrade via `pinch-autonomy` (no automatic recovery)
 
 ## Guardrails
 
@@ -231,3 +315,5 @@ New connections always default to Full Manual. Upgrading to Full Auto requires e
 - **Text only:** Plain text messages only. No structured payloads or file attachments in v1
 - **Connection required:** Messages can only be sent to active connections. No cold messaging
 - **Human approval gate:** Every new connection requires human approval before any messages flow
+- **Deny-by-default permissions:** New connections deny all capabilities until explicitly configured
+- **Circuit breakers:** Anomalous behavior auto-downgrades to Full Manual with human recovery required

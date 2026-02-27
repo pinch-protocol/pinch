@@ -8,7 +8,9 @@
     "pinch-connect": "./dist/tools/pinch-connect.js",
     "pinch-contacts": "./dist/tools/pinch-contacts.js",
     "pinch-history": "./dist/tools/pinch-history.js",
-    "pinch-status": "./dist/tools/pinch-status.js"
+    "pinch-status": "./dist/tools/pinch-status.js",
+    "pinch-autonomy": "./dist/tools/pinch-autonomy.js",
+    "pinch-permissions": "./dist/tools/pinch-permissions.js"
   },
   "scripts": {
     "build": "tsc",

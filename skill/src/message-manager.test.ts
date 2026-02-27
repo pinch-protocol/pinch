@@ -19,8 +19,8 @@ import { ensureSodiumReady, encrypt, ed25519PubToX25519, ed25519PrivToX25519 } f
 import { signDeliveryConfirmation } from "./delivery.js";
 import { MessageStore } from "./message-store.js";
 import { ConnectionStore } from "./connection-store.js";
-import { InboundRouter } from "./inbound-router.js";
 import { MessageManager } from "./message-manager.js";
+import type { EnforcementPipeline } from "./autonomy/enforcement-pipeline.js";
 import type { RelayClient } from "./relay-client.js";
 
 /** Create a mock RelayClient that tracks sent envelopes and supports multiple handlers. */
@@ -62,7 +62,7 @@ describe("MessageManager", () => {
 	let tempDir: string;
 	let messageStore: MessageStore;
 	let connectionStore: ConnectionStore;
-	let inboundRouter: InboundRouter;
+	let mockEnforcementPipeline: EnforcementPipeline;
 	let mockRelay: ReturnType<typeof createMockRelayClient>;
 	let manager: MessageManager;
 
@@ -86,13 +86,23 @@ describe("MessageManager", () => {
 		mockRelay = createMockRelayClient(
 			"pinch:alice@localhost",
 		) as any;
-		inboundRouter = new InboundRouter(connectionStore, messageStore);
+		mockEnforcementPipeline = {
+			async process(message, connectionAddress) {
+				return {
+					messageId: message.id,
+					senderAddress: connectionAddress,
+					body: message.body,
+					priority: message.priority,
+					state: "escalated_to_human",
+				};
+			},
+		} as unknown as EnforcementPipeline;
 		manager = new MessageManager(
 			mockRelay as unknown as RelayClient,
 			connectionStore,
 			messageStore,
 			aliceKeypair,
-			inboundRouter,
+			mockEnforcementPipeline,
 		);
 		await manager.init();
 	});

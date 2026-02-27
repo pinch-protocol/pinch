@@ -52,14 +52,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **AUTO-01**: Each connection has a configurable autonomy level: Full Manual, Notify, Auto-respond, or Full Auto
 - [x] **AUTO-02**: New connections default to Full Manual -- human approves every inbound message
-- [ ] **AUTO-03**: Full Manual: agent queues inbound messages for human approval before processing
-- [ ] **AUTO-04**: Notify: agent processes messages autonomously and notifies human of actions taken
-- [ ] **AUTO-05**: Auto-respond: agent handles messages within configured rules, logs everything
-- [ ] **AUTO-06**: Full Auto: agent operates independently, logs to audit trail
-- [ ] **AUTO-07**: Human can change autonomy level for any connection at any time
-- [ ] **AUTO-08**: Inbound permissions manifest defines what message types/actions a connection can send
-- [ ] **AUTO-09**: Permissions are enforced at the agent level before decrypted content reaches the LLM
-- [ ] **AUTO-10**: Circuit breakers auto-downgrade autonomy level when a connection exhibits anomalous behavior
+- [x] **AUTO-03**: Full Manual: agent queues inbound messages for human approval before processing
+- [x] **AUTO-04**: Notify: agent processes messages autonomously and notifies human of actions taken
+- [x] **AUTO-05**: Auto-respond: agent handles messages within configured rules, logs everything
+- [x] **AUTO-06**: Full Auto: agent operates independently, logs to audit trail
+- [x] **AUTO-07**: Human can change autonomy level for any connection at any time
+- [x] **AUTO-08**: Inbound permissions manifest defines what message types/actions a connection can send
+- [x] **AUTO-09**: Permissions are enforced at the agent level before decrypted content reaches the LLM
+- [x] **AUTO-10**: Circuit breakers auto-downgrade autonomy level when a connection exhibits anomalous behavior
 
 ### Oversight
 
@@ -148,14 +148,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONN-06 | Phase 2 | Complete |
 | AUTO-01 | Phase 2 | Complete |
 | AUTO-02 | Phase 2 | Complete |
-| AUTO-03 | Phase 5 | Pending |
-| AUTO-04 | Phase 5 | Pending |
-| AUTO-05 | Phase 5 | Pending |
-| AUTO-06 | Phase 5 | Pending |
-| AUTO-07 | Phase 5 | Pending |
-| AUTO-08 | Phase 5 | Pending |
-| AUTO-09 | Phase 5 | Pending |
-| AUTO-10 | Phase 5 | Pending |
+| AUTO-03 | Phase 5 | Complete |
+| AUTO-04 | Phase 5 | Complete |
+| AUTO-05 | Phase 5 | Complete |
+| AUTO-06 | Phase 5 | Complete |
+| AUTO-07 | Phase 5 | Complete |
+| AUTO-08 | Phase 5 | Complete |
+| AUTO-09 | Phase 5 | Complete |
+| AUTO-10 | Phase 5 | Complete |
 | OVRS-01 | Phase 6 | Pending |
 | OVRS-02 | Phase 6 | Pending |
 | OVRS-03 | Phase 6 | Pending |
