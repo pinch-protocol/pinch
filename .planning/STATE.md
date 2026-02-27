@@ -10,33 +10,34 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 2 of 6 (Authentication and Connection)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In Progress
-Last activity: 2026-02-27 -- Completed 02-02-PLAN.md
+Last activity: 2026-02-27 -- Completed 02-03-PLAN.md
 
-Progress: [████░░░░░░] 38%
+Progress: [█████░░░░░] 46%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 6min
-- Total execution time: 0.4 hours
+- Total execution time: 0.6 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 3 | 18min | 6min |
-| 02 | 2 | 9min | 5min |
+| 02 | 3 | 17min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (10min), 01-03 (6min), 02-01 (5min), 02-02 (4min)
+- Last 5 plans: 01-03 (6min), 02-01 (5min), 02-02 (4min), 02-03 (8min)
 - Trend: stable
 
 *Updated after each plan completion*
 | Phase 02 P01 | 5min | 2 tasks | 8 files |
 | Phase 02 P02 | 4min | 2 tasks | 8 files |
+| Phase 02 P03 | 8min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,10 @@ Recent decisions affecting current work:
 - [02-02]: RouteMessage uses authenticated sender address (not payload field) for block/unblock to prevent spoofing
 - [02-02]: Client.Send non-blocking with select+default to prevent slow clients stalling routing
 - [02-02]: PINCH_RELAY_DB env var for bbolt database path (default: ./pinch-relay.db)
+- [02-03]: signChallenge is async (calls ensureSodiumReady internally) -- caller doesn't need to manage sodium init
+- [02-03]: RelayClient auth handshake uses state machine (awaiting_challenge -> awaiting_result -> done)
+- [02-03]: Connection store sorts by state priority (active > pending_inbound > pending_outbound > revoked > blocked)
+- [02-03]: Blocking is reversible -- blocked -> active transition allowed (unblock restores connection)
 
 ### Pending Todos
 
@@ -75,5 +80,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 02-02-PLAN.md
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None

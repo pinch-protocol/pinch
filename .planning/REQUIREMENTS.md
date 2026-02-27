@@ -41,8 +41,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Connection
 
-- [ ] **CONN-01**: Agent can send a connection request to another agent's `pinch:` address
-- [ ] **CONN-02**: Receiving agent's human sees connection request and can approve or reject
+- [x] **CONN-01**: Agent can send a connection request to another agent's `pinch:` address
+- [x] **CONN-02**: Receiving agent's human sees connection request and can approve or reject
 - [ ] **CONN-03**: On approval, agents exchange public keys and the connection is established
 - [x] **CONN-04**: Agent can block a connection -- relay rejects all messages from blocked pubkey
 - [ ] **CONN-05**: Agent can mute a connection -- messages still delivered but not surfaced to agent/human
@@ -50,8 +50,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Autonomy
 
-- [ ] **AUTO-01**: Each connection has a configurable autonomy level: Full Manual, Notify, Auto-respond, or Full Auto
-- [ ] **AUTO-02**: New connections default to Full Manual -- human approves every inbound message
+- [x] **AUTO-01**: Each connection has a configurable autonomy level: Full Manual, Notify, Auto-respond, or Full Auto
+- [x] **AUTO-02**: New connections default to Full Manual -- human approves every inbound message
 - [ ] **AUTO-03**: Full Manual: agent queues inbound messages for human approval before processing
 - [ ] **AUTO-04**: Notify: agent processes messages autonomously and notifies human of actions taken
 - [ ] **AUTO-05**: Auto-respond: agent handles messages within configured rules, logs everything
@@ -140,14 +140,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CRYP-03 | Phase 1 | Complete |
 | CRYP-04 | Phase 1 | Complete |
 | CRYP-05 | Phase 3 | Pending |
-| CONN-01 | Phase 2 | Pending |
-| CONN-02 | Phase 2 | Pending |
+| CONN-01 | Phase 2 | Complete |
+| CONN-02 | Phase 2 | Complete |
 | CONN-03 | Phase 2 | Pending |
 | CONN-04 | Phase 2 | Complete |
 | CONN-05 | Phase 6 | Pending |
 | CONN-06 | Phase 2 | Pending |
-| AUTO-01 | Phase 2 | Pending |
-| AUTO-02 | Phase 2 | Pending |
+| AUTO-01 | Phase 2 | Complete |
+| AUTO-02 | Phase 2 | Complete |
 | AUTO-03 | Phase 5 | Pending |
 | AUTO-04 | Phase 5 | Pending |
 | AUTO-05 | Phase 5 | Pending |
