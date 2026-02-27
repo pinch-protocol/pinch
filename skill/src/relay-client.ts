@@ -1,15 +1,14 @@
 import WebSocket from "ws";
-import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
+import sodium from "libsodium-wrappers-sumo";
+import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
-	EnvelopeSchema,
-	AuthChallengeSchema,
 	AuthResponseSchema,
-	AuthResultSchema,
+	EnvelopeSchema,
 	MessageType,
 } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { Keypair } from "./identity.js";
-import { signChallenge } from "./auth.js";
+import { ensureSodiumReady } from "./crypto.js";
 
 /** Options for configuring the RelayClient. */
 export interface RelayClientOptions {
@@ -27,9 +26,6 @@ export interface RelayClientOptions {
  * RelayClient connects to a Pinch relay server over WebSocket,
  * performs an Ed25519 challenge-response auth handshake, and
  * maintains the connection with periodic heartbeat pings.
- *
- * Phase 2: auth handshake on connect. No reconnection with
- * exponential backoff (not a Phase 2 requirement).
  */
 export class RelayClient {
 	private ws: WebSocket | null = null;
@@ -41,6 +37,7 @@ export class RelayClient {
 	private heartbeatInterval: number;
 	private pongTimeout: number;
 	private authTimeout: number;
+	private authenticated = false;
 	private messageHandler: ((data: Buffer) => void) | null = null;
 	private envelopeHandlers: ((envelope: Envelope) => void)[] = [];
 
@@ -71,104 +68,85 @@ export class RelayClient {
 	}
 
 	/**
-	 * Connect to the relay server. Performs the Ed25519 challenge-response
-	 * auth handshake before resolving. Rejects if connection or auth fails.
-	 *
-	 * Handshake flow:
-	 * 1. Open WebSocket to relay (no ?address= query param)
-	 * 2. Receive AuthChallenge (nonce) from relay
-	 * 3. Sign nonce with Ed25519 private key
-	 * 4. Send AuthResponse (signature + public key)
-	 * 5. Receive AuthResult with assigned pinch: address
+	 * Connect to the relay server. Performs auth handshake before resolving.
 	 */
-	connect(): Promise<void> {
+	async connect(): Promise<void> {
+		await ensureSodiumReady();
 		return new Promise((resolve, reject) => {
+			let settled = false;
+			const resolveOnce = () => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				resolve();
+			};
+			const rejectOnce = (err: Error) => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				reject(err);
+			};
+
 			const url = `${this.relayUrl}/ws`;
 			this.ws = new WebSocket(url);
 
-			// Auth timeout -- reject if handshake takes too long.
 			const authTimer = setTimeout(() => {
-				if (this.ws) {
-					this.ws.terminate();
-				}
-				reject(new Error("auth handshake timed out"));
+				this.ws?.terminate();
+				rejectOnce(new Error("auth handshake timed out"));
 			}, this.authTimeout);
 
-			// Track auth state: we wait for exactly two binary messages
-			// (AuthChallenge, then AuthResult) before considering connected.
 			let authState: "awaiting_challenge" | "awaiting_result" | "done" =
 				"awaiting_challenge";
 
 			this.ws.on("open", () => {
-				// WebSocket open -- now wait for the relay's AuthChallenge.
-				// Do NOT start heartbeat or resolve yet.
+				// Wait for auth challenge before considering the client connected.
 			});
 
-			this.ws.on("message", async (data: Buffer) => {
-				try {
-					if (authState === "awaiting_challenge") {
-						// Step 2: Receive AuthChallenge
-						const envelope = fromBinary(
-							EnvelopeSchema,
-							new Uint8Array(data),
-						);
-						if (envelope.payload.case !== "authChallenge") {
-							clearTimeout(authTimer);
-							this.ws?.close();
-							reject(
-								new Error(
-									`expected AuthChallenge, got ${envelope.payload.case}`,
-								),
-							);
-							return;
-						}
+			this.ws.on("message", (rawData: WebSocket.RawData, isBinary: boolean) => {
+				const data = this.normalizeRawData(rawData);
 
-						const nonce = envelope.payload.value.nonce;
-
-						// Step 3: Sign the nonce
-						const signature = await signChallenge(
-							nonce,
-							this.keypair.privateKey,
-						);
-
-						// Step 4: Send AuthResponse
-						const responseEnv = create(EnvelopeSchema, {
-							version: 1,
-							type: MessageType.AUTH_RESPONSE,
-							payload: {
-								case: "authResponse",
-								value: create(AuthResponseSchema, {
-									signature,
-									publicKey: this.keypair.publicKey,
-								}),
-							},
-						});
-						const responseData = toBinary(EnvelopeSchema, responseEnv);
-						this.ws?.send(responseData);
-
+				if (authState === "awaiting_challenge") {
+					if (!isBinary) {
+						clearTimeout(authTimer);
+						this.ws?.close();
+						rejectOnce(new Error("expected binary auth challenge"));
+						return;
+					}
+					try {
+						this.respondToAuthChallenge(data);
 						authState = "awaiting_result";
-					} else if (authState === "awaiting_result") {
-						// Step 5: Receive AuthResult
-						const envelope = fromBinary(
-							EnvelopeSchema,
-							new Uint8Array(data),
-						);
+					} catch (err) {
+						clearTimeout(authTimer);
+						this.ws?.close();
+						rejectOnce(err instanceof Error ? err : new Error(String(err)));
+					}
+					return;
+				}
+
+				if (authState === "awaiting_result") {
+					if (!isBinary) {
+						clearTimeout(authTimer);
+						this.ws?.close();
+						rejectOnce(new Error("expected binary auth result"));
+						return;
+					}
+					try {
+						const envelope = fromBinary(EnvelopeSchema, new Uint8Array(data));
 						if (envelope.payload.case !== "authResult") {
 							clearTimeout(authTimer);
 							this.ws?.close();
-							reject(
-								new Error(
-									`expected AuthResult, got ${envelope.payload.case}`,
-								),
+							rejectOnce(
+								new Error(`expected AuthResult, got ${envelope.payload.case}`),
 							);
 							return;
 						}
-
 						const result = envelope.payload.value;
 						if (!result.success) {
 							clearTimeout(authTimer);
 							this.ws?.close();
-							reject(
+							rejectOnce(
 								new Error(
 									`auth failed: ${result.errorMessage || "unknown error"}`,
 								),
@@ -176,38 +154,34 @@ export class RelayClient {
 							return;
 						}
 
-						// Auth succeeded -- store assigned address.
 						this.assignedAddress = result.assignedAddress;
+						this.authenticated = true;
 						authState = "done";
-
 						clearTimeout(authTimer);
 
-						// Start heartbeat now that auth is complete.
 						this.lastPongTime = Date.now();
 						this.startHeartbeat();
-						resolve();
-					} else {
-						// Post-auth messages go to the registered handlers.
-						if (this.messageHandler) {
-							this.messageHandler(data);
-						}
-						if (this.envelopeHandlers.length > 0) {
-							try {
-								const env = fromBinary(
-									EnvelopeSchema,
-									new Uint8Array(data),
-								);
-								for (const handler of this.envelopeHandlers) {
-									handler(env);
-								}
-							} catch {
-								// Invalid protobuf -- skip envelope handlers.
-							}
-						}
+						resolveOnce();
+					} catch (err) {
+						clearTimeout(authTimer);
+						this.ws?.close();
+						rejectOnce(err instanceof Error ? err : new Error(String(err)));
 					}
-				} catch (err) {
-					clearTimeout(authTimer);
-					reject(err instanceof Error ? err : new Error(String(err)));
+					return;
+				}
+
+				if (this.messageHandler) {
+					this.messageHandler(data);
+				}
+				if (this.envelopeHandlers.length > 0) {
+					try {
+						const env = fromBinary(EnvelopeSchema, new Uint8Array(data));
+						for (const handler of this.envelopeHandlers) {
+							handler(env);
+						}
+					} catch {
+						// Ignore non-protobuf payloads for envelope handlers.
+					}
 				}
 			});
 
@@ -217,21 +191,19 @@ export class RelayClient {
 
 			this.ws.on("close", () => {
 				clearTimeout(authTimer);
+				const wasAuthenticated = this.authenticated;
 				this.cleanup();
 				if (authState !== "done") {
-					reject(new Error("connection closed during auth handshake"));
-				} else if (this.autoReconnect) {
-					// Was authenticated and connected, then disconnected --
-					// attempt reconnection with exponential backoff.
+					rejectOnce(new Error("connection closed during auth handshake"));
+				} else if (wasAuthenticated && this.autoReconnect) {
 					this.attemptReconnect();
 				}
 			});
 
 			this.ws.on("error", (err: Error) => {
 				clearTimeout(authTimer);
-				// If we haven't connected yet, reject the connect promise.
-				if (this.ws?.readyState !== WebSocket.OPEN) {
-					reject(err);
+				if (!settled) {
+					rejectOnce(err);
 				}
 			});
 		});
@@ -258,10 +230,10 @@ export class RelayClient {
 	}
 
 	/**
-	 * Returns true if the WebSocket connection is currently open.
+	 * Returns true if the WebSocket connection is currently open and authenticated.
 	 */
 	isConnected(): boolean {
-		return this.ws?.readyState === WebSocket.OPEN;
+		return this.authenticated && this.ws?.readyState === WebSocket.OPEN;
 	}
 
 	/**
@@ -273,9 +245,6 @@ export class RelayClient {
 
 	/**
 	 * Register a handler for deserialized protobuf Envelopes (post-auth only).
-	 * Multiple handlers can be registered; all receive the same Envelope.
-	 * The handler receives parsed Envelope objects so downstream code
-	 * doesn't need to deal with raw bytes.
 	 */
 	onEnvelope(handler: (envelope: Envelope) => void): void {
 		this.envelopeHandlers.push(handler);
@@ -313,7 +282,7 @@ export class RelayClient {
 	 * The connection must be open and authenticated.
 	 */
 	send(data: Uint8Array): void {
-		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+		if (!this.authenticated || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
 			throw new Error("not connected");
 		}
 		this.ws.send(data);
@@ -330,10 +299,8 @@ export class RelayClient {
 				return;
 			}
 
-			// Check if we received a pong since the last ping.
 			const timeSinceLastPong = Date.now() - this.lastPongTime;
 			if (timeSinceLastPong > this.heartbeatInterval + this.pongTimeout) {
-				// No pong received within timeout -- connection is dead.
 				this.ws.terminate();
 				this.cleanup();
 				return;
@@ -345,13 +312,11 @@ export class RelayClient {
 
 	/**
 	 * Attempt reconnection with exponential backoff and jitter.
-	 * Tries up to maxAttempts times before giving up.
 	 */
 	private async attemptReconnect(): Promise<void> {
 		while (this.reconnectAttempt < this.maxAttempts) {
 			const delay = Math.min(
-				this.baseDelay * 2 ** this.reconnectAttempt +
-					Math.random() * 1000,
+				this.baseDelay * 2 ** this.reconnectAttempt + Math.random() * 1000,
 				this.maxDelay,
 			);
 			await new Promise((r) => setTimeout(r, delay));
@@ -365,7 +330,6 @@ export class RelayClient {
 			}
 		}
 
-		// All attempts exhausted -- notify disconnect handler.
 		if (this.disconnectHandler) {
 			this.disconnectHandler();
 		}
@@ -375,9 +339,82 @@ export class RelayClient {
 	 * Clean up heartbeat timer and reset state.
 	 */
 	private cleanup(): void {
+		this.authenticated = false;
 		if (this.heartbeatTimer) {
 			clearInterval(this.heartbeatTimer);
 			this.heartbeatTimer = null;
 		}
+	}
+
+	private normalizeRawData(rawData: WebSocket.RawData): Buffer {
+		if (Buffer.isBuffer(rawData)) {
+			return rawData;
+		}
+		if (rawData instanceof Uint8Array) {
+			return Buffer.from(rawData);
+		}
+		if (rawData instanceof ArrayBuffer) {
+			return Buffer.from(rawData);
+		}
+		if (Array.isArray(rawData)) {
+			return Buffer.concat(rawData);
+		}
+		return Buffer.from(rawData as ArrayBuffer);
+	}
+
+	private respondToAuthChallenge(data: Uint8Array): void {
+		const env = fromBinary(EnvelopeSchema, data);
+		if (env.type !== MessageType.AUTH_CHALLENGE || env.payload.case !== "authChallenge") {
+			throw new Error("expected auth challenge message");
+		}
+		const challenge = env.payload.value;
+		if (challenge.nonce.length !== 32) {
+			throw new Error("invalid auth challenge nonce length");
+		}
+		if (challenge.relayHost.length === 0) {
+			throw new Error("auth challenge missing relay host");
+		}
+		if (
+			this.relayHost.length > 0 &&
+			challenge.relayHost.toLowerCase() !== this.relayHost.toLowerCase()
+		) {
+			throw new Error(
+				`auth challenge relay host mismatch: expected ${this.relayHost}, got ${challenge.relayHost}`,
+			);
+		}
+
+		const signPayload = this.buildSignPayload(challenge.relayHost, challenge.nonce);
+		const signature = sodium.crypto_sign_detached(signPayload, this.keypair.privateKey);
+		const response = create(EnvelopeSchema, {
+			version: 1,
+			type: MessageType.AUTH_RESPONSE,
+			payload: {
+				case: "authResponse",
+				value: create(AuthResponseSchema, {
+					version: 1,
+					publicKey: this.keypair.publicKey,
+					signature,
+					nonce: challenge.nonce,
+				}),
+			},
+		});
+		this.ws?.send(toBinary(EnvelopeSchema, response));
+	}
+
+	private buildSignPayload(relayHost: string, nonce: Uint8Array): Uint8Array {
+		const prefix = new TextEncoder().encode("pinch-auth-v1");
+		const host = new TextEncoder().encode(relayHost);
+		const payload = new Uint8Array(prefix.length + 1 + host.length + 1 + nonce.length);
+		let offset = 0;
+		payload.set(prefix, offset);
+		offset += prefix.length;
+		payload[offset] = 0;
+		offset++;
+		payload.set(host, offset);
+		offset += host.length;
+		payload[offset] = 0;
+		offset++;
+		payload.set(nonce, offset);
+		return payload;
 	}
 }

@@ -6,6 +6,7 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -30,6 +31,13 @@ const (
 	flushBatchDelay = 10 * time.Millisecond
 )
 
+var ErrAddressInUse = errors.New("address already in use")
+
+type registerRequest struct {
+	client *Client
+	result chan error
+}
+
 // Hub maintains the set of active clients and routes messages between them.
 // A single Hub goroutine serializes access to the routing table via channels.
 type Hub struct {
@@ -37,7 +45,7 @@ type Hub struct {
 	clients map[string]*Client
 
 	// register receives clients to add to the routing table.
-	register chan *Client
+	register chan registerRequest
 
 	// unregister receives clients to remove from the routing table.
 	unregister chan *Client
@@ -65,7 +73,7 @@ type Hub struct {
 func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue, rl *RateLimiter) *Hub {
 	return &Hub{
 		clients:     make(map[string]*Client),
-		register:    make(chan *Client),
+		register:    make(chan registerRequest),
 		unregister:  make(chan *Client),
 		blockStore:  blockStore,
 		mq:          mq,
@@ -79,10 +87,17 @@ func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue, rl *RateLimite
 func (h *Hub) Run(ctx context.Context) {
 	for {
 		select {
-		case client := <-h.register:
+		case req := <-h.register:
+			client := req.client
 			h.mu.Lock()
+			if existing, ok := h.clients[client.address]; ok && existing != client {
+				h.mu.Unlock()
+				req.result <- ErrAddressInUse
+				continue
+			}
 			h.clients[client.address] = client
 			h.mu.Unlock()
+			req.result <- nil
 
 			// Check for queued messages and start flush if needed.
 			if h.mq != nil {
@@ -94,7 +109,6 @@ func (h *Hub) Run(ctx context.Context) {
 					go h.flushQueuedMessages(client)
 				}
 			}
-
 			slog.Info("client registered",
 				"address", client.address,
 				"connections", h.ClientCount(),
@@ -102,7 +116,7 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case client := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client.address]; ok {
+			if existing, ok := h.clients[client.address]; ok && existing == client {
 				delete(h.clients, client.address)
 				close(client.send)
 				client.cancel()
@@ -224,8 +238,10 @@ func (h *Hub) LookupClient(address string) (*Client, bool) {
 }
 
 // Register queues a client for registration with the hub.
-func (h *Hub) Register(client *Client) {
-	h.register <- client
+func (h *Hub) Register(client *Client) error {
+	result := make(chan error, 1)
+	h.register <- registerRequest{client: client, result: result}
+	return <-result
 }
 
 // Unregister queues a client for removal from the hub.

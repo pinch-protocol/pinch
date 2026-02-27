@@ -2,15 +2,17 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,15 +27,29 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type wsConfig struct {
+	relayPublicHost  string
+	allowedOrigins   map[string]struct{}
+	originPatterns   []string
+	authChallengeTTL time.Duration
+	authTimeout      time.Duration
+	nowFn            func() time.Time
+}
+
 func main() {
 	port := os.Getenv("PINCH_RELAY_PORT")
 	if port == "" {
 		port = "8080"
 	}
-
-	relayHost := os.Getenv("PINCH_RELAY_HOST")
-	if relayHost == "" {
-		relayHost = "localhost"
+	publicHost := os.Getenv("PINCH_RELAY_PUBLIC_HOST")
+	if publicHost == "" {
+		slog.Error("missing required PINCH_RELAY_PUBLIC_HOST")
+		os.Exit(1)
+	}
+	allowedOrigins, originPatterns, err := parseAllowedOrigins(os.Getenv("PINCH_RELAY_ALLOWED_ORIGINS"))
+	if err != nil {
+		slog.Error("invalid PINCH_RELAY_ALLOWED_ORIGINS", "error", err)
+		os.Exit(1)
 	}
 
 	dbPath := os.Getenv("PINCH_RELAY_DB")
@@ -69,11 +85,6 @@ func main() {
 		}
 	}
 
-	devMode := os.Getenv("PINCH_RELAY_DEV") == "1"
-	if devMode {
-		slog.Warn("development mode enabled: WebSocket origin verification disabled")
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -106,7 +117,14 @@ func main() {
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
-	r.Get("/ws", wsHandler(ctx, h, relayHost, devMode))
+	r.Get("/ws", wsHandler(ctx, h, wsConfig{
+		relayPublicHost:  publicHost,
+		allowedOrigins:   allowedOrigins,
+		originPatterns:   originPatterns,
+		authChallengeTTL: 10 * time.Second,
+		authTimeout:      10 * time.Second,
+		nowFn:            time.Now,
+	}))
 	r.Get("/health", healthHandler(h))
 
 	srv := &http.Server{
@@ -114,7 +132,6 @@ func main() {
 		Handler: r,
 	}
 
-	// Start server in a goroutine so we can listen for shutdown signals.
 	go func() {
 		slog.Info("relay starting", "port", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -123,7 +140,6 @@ func main() {
 		}
 	}()
 
-	// Wait for shutdown signal.
 	<-ctx.Done()
 	slog.Info("shutting down relay")
 
@@ -135,169 +151,159 @@ func main() {
 	slog.Info("relay stopped")
 }
 
-// authTimeout is the maximum duration for the challenge-response handshake.
-const authTimeout = 10 * time.Second
-
-// wsHandler handles WebSocket upgrade requests. After upgrade, the relay
-// performs an Ed25519 challenge-response handshake:
-//  1. Generate 32-byte nonce and send AuthChallenge
-//  2. Wait for AuthResponse with signature and public key
-//  3. Verify signature, derive pinch: address, send AuthResult
-//  4. Register authenticated client in hub
-//
-// Unauthenticated clients are never registered in the hub routing table.
-func wsHandler(serverCtx context.Context, h *hub.Hub, relayHost string, devMode bool) http.HandlerFunc {
+// wsHandler handles WebSocket upgrade requests and performs challenge-response
+// authentication before registering the client in the hub.
+func wsHandler(serverCtx context.Context, h *hub.Hub, cfg wsConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !isOriginAllowed(r.Header.Get("Origin"), cfg.allowedOrigins) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			// Allow connections from any origin when PINCH_RELAY_DEV=1.
-			InsecureSkipVerify: devMode,
+			OriginPatterns: cfg.originPatterns,
 		})
 		if err != nil {
 			slog.Error("websocket accept error", "error", err)
 			return
 		}
 
-		// Perform auth handshake with timeout.
-		pubKey, address, err := performAuth(serverCtx, conn, relayHost)
+		pubKey, address, err := auth.Authenticate(
+			serverCtx,
+			conn,
+			cfg.relayPublicHost,
+			cfg.authChallengeTTL,
+			cfg.authTimeout,
+			cfg.nowFn,
+		)
 		if err != nil {
-			slog.Info("auth failed", "error", err)
+			slog.Warn("authentication failed", "error", err)
+			_ = sendAuthResult(conn, false, "", "authentication failed")
+			_ = conn.Close(websocket.StatusPolicyViolation, "authentication failed")
 			return
 		}
 
-		// CRITICAL: Only register AFTER auth succeeds.
 		client := hub.NewClient(h, conn, address, pubKey, serverCtx)
-		h.Register(client)
+		if err := h.Register(client); err != nil {
+			slog.Warn("registration failed", "address", address, "error", err)
+			client.Close()
+			_ = sendAuthResult(conn, false, "", "address already connected")
+			_ = conn.Close(websocket.StatusPolicyViolation, "address already connected")
+			return
+		}
+
+		if err := sendAuthResult(conn, true, address, ""); err != nil {
+			slog.Warn("failed to send auth result", "address", address, "error", err)
+			h.Unregister(client)
+			_ = conn.Close(websocket.StatusInternalError, "authentication acknowledgment failed")
+			return
+		}
 
 		slog.Info("client authenticated", "address", address)
-
 		go client.ReadPump()
 		go client.WritePump()
 		go client.HeartbeatLoop()
 	}
 }
 
-// performAuth executes the challenge-response handshake on an accepted
-// WebSocket connection. Returns the verified public key and derived address,
-// or an error if authentication fails. On failure, an AuthResult with
-// success=false is sent and the connection is closed.
-func performAuth(ctx context.Context, conn *websocket.Conn, relayHost string) (ed25519.PublicKey, string, error) {
-	authCtx, cancel := context.WithTimeout(ctx, authTimeout)
-	defer cancel()
-
-	// Step 1: Generate and send challenge.
-	nonce, err := auth.GenerateChallenge()
-	if err != nil {
-		conn.Close(websocket.StatusInternalError, "internal error")
-		return nil, "", err
-	}
-
-	challengeEnv := &pinchv1.Envelope{
-		Version: 1,
-		Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_CHALLENGE,
-		Payload: &pinchv1.Envelope_AuthChallenge{
-			AuthChallenge: &pinchv1.AuthChallenge{
-				Nonce:     nonce,
-				Timestamp: time.Now().Unix(),
-			},
-		},
-	}
-	challengeData, err := proto.Marshal(challengeEnv)
-	if err != nil {
-		conn.Close(websocket.StatusInternalError, "internal error")
-		return nil, "", err
-	}
-	if err := conn.Write(authCtx, websocket.MessageBinary, challengeData); err != nil {
-		return nil, "", err
-	}
-
-	// Step 2: Read client's AuthResponse.
-	_, responseData, err := conn.Read(authCtx)
-	if err != nil {
-		return nil, "", err
-	}
-
-	var responseEnv pinchv1.Envelope
-	if err := proto.Unmarshal(responseData, &responseEnv); err != nil {
-		sendAuthFailure(authCtx, conn, "invalid protobuf message")
-		conn.Close(websocket.StatusProtocolError, "invalid message")
-		return nil, "", err
-	}
-
-	authResp := responseEnv.GetAuthResponse()
-	if authResp == nil {
-		sendAuthFailure(authCtx, conn, "expected AuthResponse payload")
-		conn.Close(websocket.StatusProtocolError, "unexpected message type")
-		return nil, "", errUnexpectedPayload
-	}
-
-	pubKey := ed25519.PublicKey(authResp.PublicKey)
-	signature := authResp.Signature
-
-	// Step 3: Verify signature.
-	if !auth.VerifyChallenge(pubKey, nonce, signature) {
-		sendAuthFailure(authCtx, conn, "signature verification failed")
-		conn.Close(4001, "auth failed")
-		return nil, "", errAuthFailed
-	}
-
-	// Step 4: Derive address and send success result.
-	address := auth.DeriveAddress(pubKey, relayHost)
-
-	resultEnv := &pinchv1.Envelope{
-		Version: 1,
-		Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_RESULT,
-		Payload: &pinchv1.Envelope_AuthResult{
-			AuthResult: &pinchv1.AuthResult{
-				Success:         true,
-				AssignedAddress: address,
-			},
-		},
-	}
-	resultData, err := proto.Marshal(resultEnv)
-	if err != nil {
-		conn.Close(websocket.StatusInternalError, "internal error")
-		return nil, "", err
-	}
-	if err := conn.Write(authCtx, websocket.MessageBinary, resultData); err != nil {
-		return nil, "", err
-	}
-
-	return pubKey, address, nil
-}
-
-// sendAuthFailure sends an AuthResult with success=false to the client.
-func sendAuthFailure(ctx context.Context, conn *websocket.Conn, errMsg string) {
+func sendAuthResult(conn *websocket.Conn, success bool, assignedAddress, errorMessage string) error {
 	env := &pinchv1.Envelope{
 		Version: 1,
 		Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_RESULT,
 		Payload: &pinchv1.Envelope_AuthResult{
 			AuthResult: &pinchv1.AuthResult{
-				Success:      false,
-				ErrorMessage: errMsg,
+				Success:         success,
+				ErrorMessage:    errorMessage,
+				AssignedAddress: assignedAddress,
 			},
 		},
 	}
 	data, err := proto.Marshal(env)
 	if err != nil {
-		return
+		return err
 	}
-	_ = conn.Write(ctx, websocket.MessageBinary, data)
+	writeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return conn.Write(writeCtx, websocket.MessageBinary, data)
 }
-
-var (
-	errUnexpectedPayload = fmt.Errorf("unexpected payload type: expected AuthResponse")
-	errAuthFailed        = fmt.Errorf("authentication failed: invalid signature")
-)
 
 // healthHandler returns the current health status of the relay,
 // including goroutine count and active connection count.
 func healthHandler(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !isLoopbackRemoteAddr(r.RemoteAddr) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		status := map[string]int{
 			"goroutines":  runtime.NumGoroutine(),
 			"connections": h.ClientCount(),
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(status)
+		_ = json.NewEncoder(w).Encode(status)
 	}
+}
+
+func parseAllowedOrigins(raw string) (map[string]struct{}, []string, error) {
+	allowed := make(map[string]struct{})
+	if strings.TrimSpace(raw) == "" {
+		return allowed, nil, nil
+	}
+
+	parts := strings.Split(raw, ",")
+	patterns := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin, err := canonicalOrigin(part)
+		if err != nil {
+			return nil, nil, err
+		}
+		if origin == "" {
+			continue
+		}
+		allowed[origin] = struct{}{}
+		patterns = append(patterns, origin)
+	}
+	return allowed, patterns, nil
+}
+
+func isOriginAllowed(originHeader string, allowed map[string]struct{}) bool {
+	if originHeader == "" {
+		return true
+	}
+	origin, err := canonicalOrigin(originHeader)
+	if err != nil {
+		return false
+	}
+	_, ok := allowed[origin]
+	return ok
+}
+
+func canonicalOrigin(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", err
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("origin must include scheme and host")
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", errors.New("origin must not include a path")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("origin must not include query or fragment")
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), nil
+}
+
+func isLoopbackRemoteAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

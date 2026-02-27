@@ -8,7 +8,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { chmod, readFile, writeFile } from "node:fs/promises";
 import sodium from "libsodium-wrappers-sumo";
 import bs58 from "bs58";
 import { ensureSodiumReady } from "./crypto.js";
@@ -61,7 +61,11 @@ export async function saveKeypair(
 		),
 		created_at: new Date().toISOString(),
 	};
-	await writeFile(path, JSON.stringify(data, null, 2), "utf-8");
+	await writeFile(path, JSON.stringify(data, null, 2), {
+		encoding: "utf-8",
+		mode: 0o600,
+	});
+	await chmod(path, 0o600);
 }
 
 /**

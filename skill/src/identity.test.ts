@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { readFileSync } from "node:fs";
+import { chmodSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -78,6 +78,36 @@ describe("saveKeypair and loadKeypair", () => {
 				"test.relay.example.com",
 			);
 			expect(addr2).toBe(addr1);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("writes new keypair files with owner-only permissions", async () => {
+		const kp = await generateKeypair();
+		const tmpDir = mkdtempSync(join(tmpdir(), "pinch-test-perms-"));
+		const keyPath = join(tmpDir, "identity.json");
+
+		try {
+			await saveKeypair(kp, keyPath);
+			const mode = statSync(keyPath).mode & 0o777;
+			expect(mode).toBe(0o600);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("corrects permissions on existing keypair files to owner-only", async () => {
+		const kp = await generateKeypair();
+		const tmpDir = mkdtempSync(join(tmpdir(), "pinch-test-perms-"));
+		const keyPath = join(tmpDir, "identity.json");
+
+		try {
+			writeFileSync(keyPath, "{}\n", { mode: 0o644 });
+			chmodSync(keyPath, 0o644);
+			await saveKeypair(kp, keyPath);
+			const mode = statSync(keyPath).mode & 0o777;
+			expect(mode).toBe(0o600);
 		} finally {
 			rmSync(tmpDir, { recursive: true, force: true });
 		}

@@ -182,3 +182,8 @@ func (c *Client) SetFlushing(v bool) {
 	c.flushing.Store(v)
 }
 
+// Close releases per-client context resources for connections that never enter
+// the normal hub unregister lifecycle (for example, rejected registration).
+func (c *Client) Close() {
+	c.cancel()
+}

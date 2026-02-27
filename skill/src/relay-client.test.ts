@@ -1,16 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type ChildProcess, spawn } from "node:child_process";
-import { dirname, resolve, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
-import {
-	EnvelopeSchema,
-	MessageType,
-} from "@pinch/proto/pinch/v1/envelope_pb.js";
+import { create, toBinary } from "@bufbuild/protobuf";
+import { EnvelopeSchema, MessageType } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
+import WS from "ws";
 import { RelayClient } from "./relay-client.js";
+import { ensureSodiumReady } from "./crypto.js";
 import { generateKeypair } from "./identity.js";
 import type { Keypair } from "./identity.js";
 
@@ -25,11 +24,21 @@ const HEALTH_URL = `http://127.0.0.1:${RELAY_PORT}/health`;
 let relayProcess: ChildProcess;
 let tempDbDir: string;
 
+async function createClient(
+	options?: {
+		heartbeatInterval?: number;
+		pongTimeout?: number;
+		authTimeout?: number;
+		autoReconnect?: boolean;
+	},
+	keypair?: Keypair,
+): Promise<RelayClient> {
+	const kp = keypair ?? (await generateKeypair());
+	return new RelayClient(RELAY_URL, kp, RELAY_HOST, options);
+}
+
 /** Fetch the health endpoint and return parsed JSON. */
-async function getHealth(): Promise<{
-	goroutines: number;
-	connections: number;
-}> {
+async function getHealth(): Promise<{ goroutines: number; connections: number }> {
 	const resp = await fetch(HEALTH_URL);
 	return resp.json() as Promise<{ goroutines: number; connections: number }>;
 }
@@ -49,10 +58,7 @@ async function waitForRelay(timeoutMs = 25000): Promise<void> {
 }
 
 /** Wait until /health reports the expected connection count. */
-async function waitForConnections(
-	expected: number,
-	timeoutMs = 5000,
-): Promise<void> {
+async function waitForConnections(expected: number, timeoutMs = 5000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
@@ -64,30 +70,28 @@ async function waitForConnections(
 		await new Promise((r) => setTimeout(r, 50));
 	}
 	const health = await getHealth();
-	throw new Error(
-		`expected ${expected} connections, got ${health.connections}`,
-	);
+	throw new Error(`expected ${expected} connections, got ${health.connections}`);
 }
 
 beforeAll(async () => {
+	await ensureSodiumReady();
+
 	// Use a unique temp directory for the bbolt database to avoid file lock
 	// conflicts between test runs.
 	tempDbDir = await mkdtemp(join(tmpdir(), "pinch-relay-test-"));
-	const dbPath = join(tempDbDir, "blocks.db");
+	const dbPath = join(tempDbDir, "relay.db");
 
-	// Spawn the Go relay as a child process.
 	relayProcess = spawn("go", ["run", "./relay/cmd/pinchd/"], {
 		env: {
 			...process.env,
 			PINCH_RELAY_PORT: String(RELAY_PORT),
-			PINCH_RELAY_HOST: RELAY_HOST,
+			PINCH_RELAY_PUBLIC_HOST: RELAY_HOST,
 			PINCH_RELAY_DB: dbPath,
 		},
 		cwd: PROJECT_ROOT,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 
-	// Relay logs to stderr via slog; pipe but don't print unless debugging.
 	relayProcess.stderr?.on("data", () => {});
 	relayProcess.stdout?.on("data", () => {});
 
@@ -98,7 +102,6 @@ afterAll(async () => {
 	if (relayProcess) {
 		relayProcess.kill("SIGTERM");
 	}
-	// Clean up temp db directory.
 	if (tempDbDir) {
 		await rm(tempDbDir, { recursive: true, force: true }).catch(() => {});
 	}
@@ -106,8 +109,7 @@ afterAll(async () => {
 
 describe("RelayClient with auth handshake", () => {
 	it("connects, authenticates, and gets an assigned address", async () => {
-		const kp = await generateKeypair();
-		const client = new RelayClient(RELAY_URL, kp, RELAY_HOST);
+		const client = await createClient();
 		await client.connect();
 
 		expect(client.isConnected()).toBe(true);
@@ -123,8 +125,7 @@ describe("RelayClient with auth handshake", () => {
 	});
 
 	it("disconnects cleanly and health shows 0 connections", async () => {
-		const kp = await generateKeypair();
-		const client = new RelayClient(RELAY_URL, kp, RELAY_HOST);
+		const client = await createClient();
 		await client.connect();
 		expect(client.isConnected()).toBe(true);
 
@@ -139,23 +140,14 @@ describe("RelayClient with auth handshake", () => {
 	});
 
 	it("supports multiple clients with different keypairs", async () => {
-		const keypairs = await Promise.all([
-			generateKeypair(),
-			generateKeypair(),
-			generateKeypair(),
-		]);
-		const clients = keypairs.map(
-			(kp) => new RelayClient(RELAY_URL, kp, RELAY_HOST),
-		);
+		const clients = await Promise.all([createClient(), createClient(), createClient()]);
 
-		// Connect all clients.
 		await Promise.all(clients.map((c) => c.connect()));
 		for (const c of clients) {
 			expect(c.isConnected()).toBe(true);
 			expect(c.assignedAddress).toBeTruthy();
 		}
 
-		// All assigned addresses should be unique.
 		const addresses = clients.map((c) => c.assignedAddress);
 		const unique = new Set(addresses);
 		expect(unique.size).toBe(3);
@@ -164,7 +156,6 @@ describe("RelayClient with auth handshake", () => {
 		const health = await getHealth();
 		expect(health.connections).toBe(3);
 
-		// Disconnect all.
 		for (const c of clients) {
 			c.disconnect();
 		}
@@ -172,9 +163,7 @@ describe("RelayClient with auth handshake", () => {
 	});
 
 	it("heartbeat keeps connection alive after auth", async () => {
-		const kp = await generateKeypair();
-		// Use a short heartbeat interval for faster testing.
-		const client = new RelayClient(RELAY_URL, kp, RELAY_HOST, {
+		const client = await createClient({
 			heartbeatInterval: 500,
 			pongTimeout: 2000,
 		});
@@ -182,10 +171,7 @@ describe("RelayClient with auth handshake", () => {
 		expect(client.isConnected()).toBe(true);
 		expect(client.assignedAddress).toBeTruthy();
 
-		// Wait long enough for at least two heartbeat cycles.
 		await new Promise((r) => setTimeout(r, 1500));
-
-		// Connection should still be alive.
 		expect(client.isConnected()).toBe(true);
 
 		client.disconnect();
@@ -193,22 +179,20 @@ describe("RelayClient with auth handshake", () => {
 	});
 
 	it("rejects non-WebSocket requests to /ws", async () => {
-		// Attempt a plain HTTP GET to /ws (no WebSocket upgrade).
 		const resp = await fetch(`http://127.0.0.1:${RELAY_PORT}/ws`);
-		// The server should reject the non-upgrade request.
 		expect(resp.ok).toBe(false);
 	});
 
 	it("same keypair gets the same assigned address on reconnect", async () => {
 		const kp = await generateKeypair();
 
-		const client1 = new RelayClient(RELAY_URL, kp, RELAY_HOST);
+		const client1 = await createClient(undefined, kp);
 		await client1.connect();
 		const addr1 = client1.assignedAddress;
 		client1.disconnect();
 		await waitForConnections(0);
 
-		const client2 = new RelayClient(RELAY_URL, kp, RELAY_HOST);
+		const client2 = await createClient(undefined, kp);
 		await client2.connect();
 		const addr2 = client2.assignedAddress;
 		client2.disconnect();
@@ -218,17 +202,13 @@ describe("RelayClient with auth handshake", () => {
 	});
 
 	it("multiple onEnvelope handlers all receive the same envelope", async () => {
-		const kpSender = await generateKeypair();
-		const kpReceiver = await generateKeypair();
-
-		const sender = new RelayClient(RELAY_URL, kpSender, RELAY_HOST);
-		const receiver = new RelayClient(RELAY_URL, kpReceiver, RELAY_HOST);
+		const sender = await createClient();
+		const receiver = await createClient();
 
 		await sender.connect();
 		await receiver.connect();
 		await waitForConnections(2);
 
-		// Register two envelope handlers on receiver
 		const received1: Envelope[] = [];
 		const received2: Envelope[] = [];
 
@@ -239,7 +219,6 @@ describe("RelayClient with auth handshake", () => {
 			received2.push(env);
 		});
 
-		// Sender sends a heartbeat envelope to receiver
 		const envelope = create(EnvelopeSchema, {
 			version: 1,
 			fromAddress: sender.assignedAddress!,
@@ -247,13 +226,10 @@ describe("RelayClient with auth handshake", () => {
 			type: MessageType.HEARTBEAT,
 			timestamp: BigInt(Date.now()),
 		});
-		const data = toBinary(EnvelopeSchema, envelope);
-		sender.sendEnvelope(data);
+		sender.sendEnvelope(toBinary(EnvelopeSchema, envelope));
 
-		// Wait for delivery
 		await new Promise((r) => setTimeout(r, 500));
 
-		// Both handlers should have received the envelope
 		expect(received1).toHaveLength(1);
 		expect(received2).toHaveLength(1);
 		expect(received1[0].type).toBe(MessageType.HEARTBEAT);
@@ -261,6 +237,55 @@ describe("RelayClient with auth handshake", () => {
 
 		sender.disconnect();
 		receiver.disconnect();
+		await waitForConnections(0);
+	});
+
+	it("rejects unauthenticated websocket connections", async () => {
+		const ws = new WS(`${RELAY_URL}/ws`);
+		const firstServerEvent = new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(
+				() => reject(new Error("timed out waiting for challenge/close")),
+				1000,
+			);
+			ws.once("message", () => {
+				clearTimeout(timer);
+				resolve();
+			});
+			ws.once("close", () => {
+				clearTimeout(timer);
+				resolve();
+			});
+			ws.once("error", (err) => {
+				clearTimeout(timer);
+				reject(err);
+			});
+		});
+
+		await new Promise<void>((resolve, reject) => {
+			ws.once("open", () => resolve());
+			ws.once("error", (err) => reject(err));
+		});
+
+		await firstServerEvent;
+		await waitForConnections(0, 2000);
+		ws.terminate();
+	});
+
+	it("rejects duplicate-address connect before reporting connected", async () => {
+		const kp = await generateKeypair();
+		const primary = await createClient(undefined, kp);
+		await primary.connect();
+		await waitForConnections(1);
+
+		const duplicate = await createClient({ authTimeout: 3000 }, kp);
+		await expect(duplicate.connect()).rejects.toThrow(/address already connected/i);
+		expect(duplicate.isConnected()).toBe(false);
+
+		const health = await getHealth();
+		expect(health.connections).toBe(1);
+
+		duplicate.disconnect();
+		primary.disconnect();
 		await waitForConnections(0);
 	});
 });

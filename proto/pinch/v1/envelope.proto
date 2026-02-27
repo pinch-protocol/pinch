@@ -83,17 +83,23 @@ message Heartbeat {
   int64 timestamp = 1;
 }
 
-// AuthChallenge is sent by the relay after WebSocket upgrade.
-// The client must sign the nonce with its Ed25519 private key.
+// AuthChallenge is sent by the relay on connect. The agent signs
+// pinch-auth-v1\0<relay_host>\0<nonce> and returns AuthResponse.
 message AuthChallenge {
-  bytes nonce = 1;       // 32-byte random challenge
-  int64 timestamp = 2;   // server timestamp for timeout tracking
+  uint32 version = 1;
+  bytes nonce = 2;
+  int64 issued_at_ms = 3;
+  int64 expires_at_ms = 4;
+  string relay_host = 5;
 }
 
-// AuthResponse is the client's signed response to an AuthChallenge.
+// AuthResponse proves possession of the Ed25519 private key for the
+// presented public key.
 message AuthResponse {
-  bytes signature = 1;   // 64-byte Ed25519 signature of the nonce
-  bytes public_key = 2;  // 32-byte Ed25519 public key
+  uint32 version = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+  bytes nonce = 4;
 }
 
 // AuthResult is sent by the relay after verifying the AuthResponse.

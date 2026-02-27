@@ -45,7 +45,11 @@ func newTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hu
 			return
 		}
 		client := hub.NewClient(h, conn, address, nil, ctx)
-		h.Register(client)
+		if err := h.Register(client); err != nil {
+			_ = conn.Close(websocket.StatusPolicyViolation, "duplicate address")
+			t.Logf("register error: %v", err)
+			return
+		}
 		go client.ReadPump()
 		go client.WritePump()
 		go client.HeartbeatLoop()
@@ -764,8 +768,11 @@ func newAuthTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hu
 			Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_CHALLENGE,
 			Payload: &pinchv1.Envelope_AuthChallenge{
 				AuthChallenge: &pinchv1.AuthChallenge{
-					Nonce:     nonce,
-					Timestamp: time.Now().Unix(),
+					Version:     1,
+					Nonce:       nonce,
+					IssuedAtMs:  time.Now().UnixMilli(),
+					ExpiresAtMs: time.Now().Add(10 * time.Second).UnixMilli(),
+					RelayHost:   relayHost,
 				},
 			},
 		}
@@ -797,7 +804,7 @@ func newAuthTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hu
 		signature := authResp.Signature
 
 		// Step 3: Verify.
-		if !auth.VerifyChallenge(pubKey, nonce, signature) {
+		if !auth.VerifyChallenge(pubKey, auth.SignPayload(relayHost, nonce), signature) {
 			sendAuthFailureHelper(authCtx, conn, "signature verification failed")
 			conn.Close(4001, "auth failed")
 			return
@@ -882,8 +889,8 @@ func dialAuthWS(ctx context.Context, srv *httptest.Server, privKey ed25519.Priva
 		return nil, "", fmt.Errorf("expected AuthChallenge, got %T", challengeEnv.Payload)
 	}
 
-	// Sign the nonce.
-	signature := ed25519.Sign(privKey, challenge.Nonce)
+	// Sign the authenticated relay payload.
+	signature := ed25519.Sign(privKey, auth.SignPayload(challenge.GetRelayHost(), challenge.Nonce))
 
 	// Send AuthResponse.
 	responseEnv := &pinchv1.Envelope{
@@ -891,8 +898,10 @@ func dialAuthWS(ctx context.Context, srv *httptest.Server, privKey ed25519.Priva
 		Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_RESPONSE,
 		Payload: &pinchv1.Envelope_AuthResponse{
 			AuthResponse: &pinchv1.AuthResponse{
+				Version:   1,
 				Signature: signature,
 				PublicKey: pubKey,
+				Nonce:     challenge.Nonce,
 			},
 		},
 	}

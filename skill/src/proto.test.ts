@@ -5,6 +5,8 @@ import {
 	EncryptedPayloadSchema,
 	PlaintextPayloadSchema,
 	HandshakeSchema,
+	AuthChallengeSchema,
+	AuthResponseSchema,
 	MessageType,
 	MessageTypeSchema,
 } from "@pinch/proto/pinch/v1/envelope_pb.js";
@@ -92,6 +94,78 @@ describe("Envelope serialization round-trip", () => {
 			expect(decoded.payload.value.version).toBe(1);
 			expect(decoded.payload.value.signingKey).toEqual(signingKey);
 			expect(decoded.payload.value.encryptionKey).toEqual(encryptionKey);
+		}
+	});
+
+	it("should round-trip an Envelope with AuthChallenge payload", () => {
+		const nonce = new Uint8Array(32);
+		for (let i = 0; i < nonce.length; i++) nonce[i] = i + 11;
+		const now = BigInt(Date.now());
+
+		const original = create(EnvelopeSchema, {
+			version: 1,
+			type: MessageType.AUTH_CHALLENGE,
+			timestamp: now,
+			payload: {
+				case: "authChallenge",
+				value: create(AuthChallengeSchema, {
+					version: 1,
+					nonce,
+					issuedAtMs: now,
+					expiresAtMs: now + 10_000n,
+					relayHost: "relay.example.com",
+				}),
+			},
+		});
+
+		const data = toBinary(EnvelopeSchema, original);
+		const decoded = fromBinary(EnvelopeSchema, data);
+
+		expect(decoded.payload.case).toBe("authChallenge");
+		if (decoded.payload.case === "authChallenge") {
+			expect(decoded.payload.value.version).toBe(1);
+			expect(decoded.payload.value.nonce).toEqual(nonce);
+			expect(decoded.payload.value.issuedAtMs).toBe(now);
+			expect(decoded.payload.value.expiresAtMs).toBe(now + 10_000n);
+			expect(decoded.payload.value.relayHost).toBe("relay.example.com");
+		}
+	});
+
+	it("should round-trip an Envelope with AuthResponse payload", () => {
+		const publicKey = new Uint8Array(32);
+		const signature = new Uint8Array(64);
+		const nonce = new Uint8Array(32);
+		for (let i = 0; i < publicKey.length; i++) {
+			publicKey[i] = i;
+			nonce[i] = 100 + i;
+		}
+		for (let i = 0; i < signature.length; i++) {
+			signature[i] = 200 + (i % 32);
+		}
+
+		const original = create(EnvelopeSchema, {
+			version: 1,
+			type: MessageType.AUTH_RESPONSE,
+			payload: {
+				case: "authResponse",
+				value: create(AuthResponseSchema, {
+					version: 1,
+					publicKey,
+					signature,
+					nonce,
+				}),
+			},
+		});
+
+		const data = toBinary(EnvelopeSchema, original);
+		const decoded = fromBinary(EnvelopeSchema, data);
+
+		expect(decoded.payload.case).toBe("authResponse");
+		if (decoded.payload.case === "authResponse") {
+			expect(decoded.payload.value.version).toBe(1);
+			expect(decoded.payload.value.publicKey).toEqual(publicKey);
+			expect(decoded.payload.value.signature).toEqual(signature);
+			expect(decoded.payload.value.nonce).toEqual(nonce);
 		}
 	});
 });

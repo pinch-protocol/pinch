@@ -696,12 +696,15 @@ func (x *Heartbeat) GetTimestamp() int64 {
 	return 0
 }
 
-// AuthChallenge is sent by the relay after WebSocket upgrade.
-// The client must sign the nonce with its Ed25519 private key.
+// AuthChallenge is sent by the relay on connect. The agent signs
+// pinch-auth-v1\0<relay_host>\0<nonce> and returns AuthResponse.
 type AuthChallenge struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nonce         []byte                 `protobuf:"bytes,1,opt,name=nonce,proto3" json:"nonce,omitempty"`          // 32-byte random challenge
-	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // server timestamp for timeout tracking
+	Version       uint32                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Nonce         []byte                 `protobuf:"bytes,2,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	IssuedAtMs    int64                  `protobuf:"varint,3,opt,name=issued_at_ms,json=issuedAtMs,proto3" json:"issued_at_ms,omitempty"`
+	ExpiresAtMs   int64                  `protobuf:"varint,4,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	RelayHost     string                 `protobuf:"bytes,5,opt,name=relay_host,json=relayHost,proto3" json:"relay_host,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -736,6 +739,13 @@ func (*AuthChallenge) Descriptor() ([]byte, []int) {
 	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{5}
 }
 
+func (x *AuthChallenge) GetVersion() uint32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
 func (x *AuthChallenge) GetNonce() []byte {
 	if x != nil {
 		return x.Nonce
@@ -743,18 +753,35 @@ func (x *AuthChallenge) GetNonce() []byte {
 	return nil
 }
 
-func (x *AuthChallenge) GetTimestamp() int64 {
+func (x *AuthChallenge) GetIssuedAtMs() int64 {
 	if x != nil {
-		return x.Timestamp
+		return x.IssuedAtMs
 	}
 	return 0
 }
 
-// AuthResponse is the client's signed response to an AuthChallenge.
+func (x *AuthChallenge) GetExpiresAtMs() int64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
+func (x *AuthChallenge) GetRelayHost() string {
+	if x != nil {
+		return x.RelayHost
+	}
+	return ""
+}
+
+// AuthResponse proves possession of the Ed25519 private key for the
+// presented public key.
 type AuthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Signature     []byte                 `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`                  // 64-byte Ed25519 signature of the nonce
-	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"` // 32-byte Ed25519 public key
+	Version       uint32                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	Nonce         []byte                 `protobuf:"bytes,4,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -789,6 +816,20 @@ func (*AuthResponse) Descriptor() ([]byte, []int) {
 	return file_pinch_v1_envelope_proto_rawDescGZIP(), []int{6}
 }
 
+func (x *AuthResponse) GetVersion() uint32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *AuthResponse) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
 func (x *AuthResponse) GetSignature() []byte {
 	if x != nil {
 		return x.Signature
@@ -796,9 +837,9 @@ func (x *AuthResponse) GetSignature() []byte {
 	return nil
 }
 
-func (x *AuthResponse) GetPublicKey() []byte {
+func (x *AuthResponse) GetNonce() []byte {
 	if x != nil {
-		return x.PublicKey
+		return x.Nonce
 	}
 	return nil
 }
@@ -1452,14 +1493,21 @@ const file_pinch_v1_envelope_proto_rawDesc = "" +
 	"signingKey\x12%\n" +
 	"\x0eencryption_key\x18\x03 \x01(\fR\rencryptionKey\")\n" +
 	"\tHeartbeat\x12\x1c\n" +
-	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp\"C\n" +
-	"\rAuthChallenge\x12\x14\n" +
-	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12\x1c\n" +
-	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\"K\n" +
-	"\fAuthResponse\x12\x1c\n" +
-	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x1d\n" +
+	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp\"\xa4\x01\n" +
+	"\rAuthChallenge\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\rR\aversion\x12\x14\n" +
+	"\x05nonce\x18\x02 \x01(\fR\x05nonce\x12 \n" +
+	"\fissued_at_ms\x18\x03 \x01(\x03R\n" +
+	"issuedAtMs\x12\"\n" +
+	"\rexpires_at_ms\x18\x04 \x01(\x03R\vexpiresAtMs\x12\x1d\n" +
 	"\n" +
-	"public_key\x18\x02 \x01(\fR\tpublicKey\"v\n" +
+	"relay_host\x18\x05 \x01(\tR\trelayHost\"{\n" +
+	"\fAuthResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\rR\aversion\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x02 \x01(\fR\tpublicKey\x12\x1c\n" +
+	"\tsignature\x18\x03 \x01(\fR\tsignature\x12\x14\n" +
+	"\x05nonce\x18\x04 \x01(\fR\x05nonce\"v\n" +
 	"\n" +
 	"AuthResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
