@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Agents can securely message each other with human consent and oversight at every step -- no message flows without explicit human approval of the connection.
-**Current focus:** Phase 5 -- Full Autonomy and Permissions. 4-tier autonomy system implemented.
+**Current focus:** Phase 5 -- Full Autonomy and Permissions. Permissions manifest and enforcement implemented.
 
 ## Current Position
 
 Phase: 5 of 6 (Full Autonomy and Permissions)
-Plan: 1 of 3 in current phase (complete)
+Plan: 2 of 3 in current phase (complete)
 Status: In Progress
-Last activity: 2026-02-27 -- Completed 05-01-PLAN.md
+Last activity: 2026-02-27 -- Completed 05-02-PLAN.md
 
-Progress: [█████████░] 93%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: 6min
-- Total execution time: 1.5 hours
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [█████████░] 93%
 | 02 | 4 | 24min | 6min |
 | 03 | 4 | 23min | 6min |
 | 04 | 2 | 15min | 8min |
-| 05 | 1 | 6min | 6min |
+| 05 | 2 | 10min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 03-04 (4min), 04-01 (5min), 04-02 (10min), 05-01 (6min)
+- Last 5 plans: 04-01 (5min), 04-02 (10min), 05-01 (6min), 05-02 (4min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -49,6 +49,7 @@ Progress: [█████████░] 93%
 | Phase 04 P01 | 5min | 2 tasks | 10 files |
 | Phase 04 P02 | 10min | 2 tasks | 7 files |
 | Phase 05 P01 | 6min | 2 tasks | 12 files |
+| Phase 05 P02 | 4min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,10 @@ Recent decisions affecting current work:
 - [05-01]: InboundRouter activityFeed parameter is optional (3rd param) for backward compatibility
 - [05-01]: Confirmation gate for full_auto applies from any level (not just full_manual)
 - [05-01]: circuitBreakerTripped cleared on any setAutonomy call (human manual override)
+- [05-02]: Deny-all manifest assigned to new connections via defaultPermissionsManifest() in addConnection()
+- [05-02]: Plain text messages pass structural check in v1 (future phases add structured action types)
+- [05-02]: Custom category check reuses checkInformationBoundary with category description as boundary
+- [05-02]: LLM failure or uncertainty always escalates to human (safe default per research pitfall 5)
 
 ### Pending Todos
 
@@ -120,5 +125,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 05-01-PLAN.md
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
