@@ -165,13 +165,14 @@ func (c *Client) Send(data []byte) (ok bool) {
 	}
 
 	defer func() {
-		if r := recover(); r != nil {
-			slog.Debug("send on closed channel, dropping message",
-				"address", c.address,
-			)
-			ok = false
-		}
-	}()
+ defer func() {
+  if r := recover(); r != nil {
+   slog.Debug("recovered from panic in Send, dropping message",
+    "address", c.address,
+    "panic", r,
+   )
+  }
+ }()
 
 	select {
 	case c.send <- data:
