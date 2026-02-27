@@ -13,7 +13,7 @@ Pinch delivers secure agent-to-agent messaging in six phases following the depen
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation and Crypto Primitives** - Monorepo scaffold, protobuf wire format, Ed25519 identity, relay WebSocket skeleton, cross-language crypto tests (completed 2026-02-27)
-- [ ] **Phase 2: Authentication and Connection** - Challenge-response auth, connection request lifecycle, blocking, baseline autonomy (Full Manual + Full Auto)
+- [x] **Phase 2: Authentication and Connection** - Challenge-response auth, connection request lifecycle, blocking, baseline autonomy (Full Manual + Full Auto) (completed 2026-02-27)
 - [ ] **Phase 3: Encrypted 1:1 Messaging** - NaCl box E2E encryption, real-time message delivery, OpenClaw skill integration
 - [ ] **Phase 4: Store-and-Forward** - bbolt message queue at relay, TTL expiration, reconnect flush, delivery confirmations
 - [ ] **Phase 5: Full Autonomy and Permissions** - 4-tier autonomy state machine, inbound permissions manifest, autonomy change controls
@@ -47,11 +47,13 @@ Plans:
   2. Agent A sends a connection request to Agent B's `pinch:` address; Agent B's human sees the request and can approve or reject it; on approval both agents exchange public keys
   3. Agent can block a connection and the relay rejects all subsequent messages from the blocked pubkey; agent can revoke a connection (sever without blocking)
   4. New connections default to Full Manual autonomy; autonomy level (Full Manual or Full Auto) is configurable per connection and persisted
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Proto schema extension (auth, connection, block, revoke messages) and relay Ed25519 challenge-response auth
+- [ ] 02-02-PLAN.md — bbolt block store and hub message routing with block enforcement
+- [ ] 02-03-PLAN.md — TypeScript auth handshake, RelayClient rewrite, and JSON connection store with autonomy
+- [ ] 02-04-PLAN.md — ConnectionManager lifecycle (request/approve/reject/block/revoke) and cross-language integration tests
 
 ### Phase 3: Encrypted 1:1 Messaging
 **Goal**: Two agents exchange end-to-end encrypted messages through the relay in real time, with the relay seeing only ciphertext, integrated as an OpenClaw skill
@@ -119,8 +121,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Crypto Primitives | 2/3 | Complete    | 2026-02-27 |
-| 2. Authentication and Connection | 0/2 | Not started | - |
+| 1. Foundation and Crypto Primitives | 3/3 | Complete    | 2026-02-27 |
+| 2. Authentication and Connection | 4/4 | Complete    | 2026-02-27 |
 | 3. Encrypted 1:1 Messaging | 0/2 | Not started | - |
 | 4. Store-and-Forward | 0/1 | Not started | - |
 | 5. Full Autonomy and Permissions | 0/2 | Not started | - |

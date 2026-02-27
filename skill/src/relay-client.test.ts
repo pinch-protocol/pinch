@@ -1,26 +1,35 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type ChildProcess, spawn } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { RelayClient } from "./relay-client.js";
+import { generateKeypair } from "./identity.js";
+import type { Keypair } from "./identity.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..", "..");
 
 const RELAY_PORT = 18923 + Math.floor(Math.random() * 1000);
 const RELAY_URL = `ws://127.0.0.1:${RELAY_PORT}`;
+const RELAY_HOST = "localhost";
 const HEALTH_URL = `http://127.0.0.1:${RELAY_PORT}/health`;
 
 let relayProcess: ChildProcess;
+let tempDbDir: string;
 
 /** Fetch the health endpoint and return parsed JSON. */
-async function getHealth(): Promise<{ goroutines: number; connections: number }> {
+async function getHealth(): Promise<{
+	goroutines: number;
+	connections: number;
+}> {
 	const resp = await fetch(HEALTH_URL);
 	return resp.json() as Promise<{ goroutines: number; connections: number }>;
 }
 
 /** Wait for the relay to be ready by polling the health endpoint. */
-async function waitForRelay(timeoutMs = 15000): Promise<void> {
+async function waitForRelay(timeoutMs = 25000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
@@ -55,11 +64,18 @@ async function waitForConnections(
 }
 
 beforeAll(async () => {
+	// Use a unique temp directory for the bbolt database to avoid file lock
+	// conflicts between test runs.
+	tempDbDir = await mkdtemp(join(tmpdir(), "pinch-relay-test-"));
+	const dbPath = join(tempDbDir, "blocks.db");
+
 	// Spawn the Go relay as a child process.
 	relayProcess = spawn("go", ["run", "./relay/cmd/pinchd/"], {
 		env: {
 			...process.env,
 			PINCH_RELAY_PORT: String(RELAY_PORT),
+			PINCH_RELAY_HOST: RELAY_HOST,
+			PINCH_RELAY_DB: dbPath,
 		},
 		cwd: PROJECT_ROOT,
 		stdio: ["ignore", "pipe", "pipe"],
@@ -72,17 +88,25 @@ beforeAll(async () => {
 	await waitForRelay();
 }, 30000);
 
-afterAll(() => {
+afterAll(async () => {
 	if (relayProcess) {
 		relayProcess.kill("SIGTERM");
 	}
+	// Clean up temp db directory.
+	if (tempDbDir) {
+		await rm(tempDbDir, { recursive: true, force: true }).catch(() => {});
+	}
 });
 
-describe("RelayClient", () => {
-	it("connects to the relay and appears in health", async () => {
-		const client = new RelayClient(RELAY_URL, "pinch:test1@localhost");
+describe("RelayClient with auth handshake", () => {
+	it("connects, authenticates, and gets an assigned address", async () => {
+		const kp = await generateKeypair();
+		const client = new RelayClient(RELAY_URL, kp, RELAY_HOST);
 		await client.connect();
+
 		expect(client.isConnected()).toBe(true);
+		expect(client.assignedAddress).toBeTruthy();
+		expect(client.assignedAddress).toMatch(/^pinch:.+@localhost$/);
 
 		await waitForConnections(1);
 		const health = await getHealth();
@@ -93,7 +117,8 @@ describe("RelayClient", () => {
 	});
 
 	it("disconnects cleanly and health shows 0 connections", async () => {
-		const client = new RelayClient(RELAY_URL, "pinch:test2@localhost");
+		const kp = await generateKeypair();
+		const client = new RelayClient(RELAY_URL, kp, RELAY_HOST);
 		await client.connect();
 		expect(client.isConnected()).toBe(true);
 
@@ -107,18 +132,27 @@ describe("RelayClient", () => {
 		expect(health.connections).toBe(0);
 	});
 
-	it("supports multiple clients with different addresses", async () => {
-		const clients = [
-			new RelayClient(RELAY_URL, "pinch:multi-a@localhost"),
-			new RelayClient(RELAY_URL, "pinch:multi-b@localhost"),
-			new RelayClient(RELAY_URL, "pinch:multi-c@localhost"),
-		];
+	it("supports multiple clients with different keypairs", async () => {
+		const keypairs = await Promise.all([
+			generateKeypair(),
+			generateKeypair(),
+			generateKeypair(),
+		]);
+		const clients = keypairs.map(
+			(kp) => new RelayClient(RELAY_URL, kp, RELAY_HOST),
+		);
 
 		// Connect all clients.
 		await Promise.all(clients.map((c) => c.connect()));
 		for (const c of clients) {
 			expect(c.isConnected()).toBe(true);
+			expect(c.assignedAddress).toBeTruthy();
 		}
+
+		// All assigned addresses should be unique.
+		const addresses = clients.map((c) => c.assignedAddress);
+		const unique = new Set(addresses);
+		expect(unique.size).toBe(3);
 
 		await waitForConnections(3);
 		const health = await getHealth();
@@ -131,14 +165,16 @@ describe("RelayClient", () => {
 		await waitForConnections(0);
 	});
 
-	it("heartbeat keeps connection alive", async () => {
+	it("heartbeat keeps connection alive after auth", async () => {
+		const kp = await generateKeypair();
 		// Use a short heartbeat interval for faster testing.
-		const client = new RelayClient(RELAY_URL, "pinch:heartbeat@localhost", {
+		const client = new RelayClient(RELAY_URL, kp, RELAY_HOST, {
 			heartbeatInterval: 500,
 			pongTimeout: 2000,
 		});
 		await client.connect();
 		expect(client.isConnected()).toBe(true);
+		expect(client.assignedAddress).toBeTruthy();
 
 		// Wait long enough for at least two heartbeat cycles.
 		await new Promise((r) => setTimeout(r, 1500));
@@ -152,26 +188,26 @@ describe("RelayClient", () => {
 
 	it("rejects non-WebSocket requests to /ws", async () => {
 		// Attempt a plain HTTP GET to /ws (no WebSocket upgrade).
-		const resp = await fetch(
-			`http://127.0.0.1:${RELAY_PORT}/ws?address=pinch:invalid@localhost`,
-		);
+		const resp = await fetch(`http://127.0.0.1:${RELAY_PORT}/ws`);
 		// The server should reject the non-upgrade request.
 		expect(resp.ok).toBe(false);
 	});
 
-	it("rejects WebSocket connections without address parameter", async () => {
-		// Try connecting without an address query parameter.
-		const client = new RelayClient(RELAY_URL, "");
+	it("same keypair gets the same assigned address on reconnect", async () => {
+		const kp = await generateKeypair();
 
-		try {
-			await client.connect();
-			// If connect succeeds, check it gets closed.
-			// The server returns 400 before upgrade, so connect should fail.
-			client.disconnect();
-			expect.fail("expected connection to fail without address");
-		} catch {
-			// Expected: connection rejected.
-			expect(client.isConnected()).toBe(false);
-		}
+		const client1 = new RelayClient(RELAY_URL, kp, RELAY_HOST);
+		await client1.connect();
+		const addr1 = client1.assignedAddress;
+		client1.disconnect();
+		await waitForConnections(0);
+
+		const client2 = new RelayClient(RELAY_URL, kp, RELAY_HOST);
+		await client2.connect();
+		const addr2 = client2.assignedAddress;
+		client2.disconnect();
+		await waitForConnections(0);
+
+		expect(addr1).toBe(addr2);
 	});
 });

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file pinch/v1/envelope.proto.
  */
 export const file_pinch_v1_envelope: GenFile = /*@__PURE__*/
-  fileDesc("ChdwaW5jaC92MS9lbnZlbG9wZS5wcm90bxIIcGluY2gudjEioQIKCEVudmVsb3BlEg8KB3ZlcnNpb24YASABKA0SFAoMZnJvbV9hZGRyZXNzGAIgASgJEhIKCnRvX2FkZHJlc3MYAyABKAkSIwoEdHlwZRgEIAEoDjIVLnBpbmNoLnYxLk1lc3NhZ2VUeXBlEhIKCm1lc3NhZ2VfaWQYBSABKAwSEQoJdGltZXN0YW1wGAYgASgDEi8KCWVuY3J5cHRlZBgKIAEoCzIaLnBpbmNoLnYxLkVuY3J5cHRlZFBheWxvYWRIABIoCgloYW5kc2hha2UYCyABKAsyEy5waW5jaC52MS5IYW5kc2hha2VIABIoCgloZWFydGJlYXQYDCABKAsyEy5waW5jaC52MS5IZWFydGJlYXRIAEIJCgdwYXlsb2FkIlAKEEVuY3J5cHRlZFBheWxvYWQSDQoFbm9uY2UYASABKAwSEgoKY2lwaGVydGV4dBgCIAEoDBIZChFzZW5kZXJfcHVibGljX2tleRgDIAEoDCJvChBQbGFpbnRleHRQYXlsb2FkEg8KB3ZlcnNpb24YASABKA0SEAoIc2VxdWVuY2UYAiABKAQSEQoJdGltZXN0YW1wGAMgASgDEg8KB2NvbnRlbnQYBCABKAwSFAoMY29udGVudF90eXBlGAUgASgJIkkKCUhhbmRzaGFrZRIPCgd2ZXJzaW9uGAEgASgNEhMKC3NpZ25pbmdfa2V5GAIgASgMEhYKDmVuY3J5cHRpb25fa2V5GAMgASgMIh4KCUhlYXJ0YmVhdBIRCgl0aW1lc3RhbXAYASABKAMqrAIKC01lc3NhZ2VUeXBlEhwKGE1FU1NBR0VfVFlQRV9VTlNQRUNJRklFRBAAEhoKFk1FU1NBR0VfVFlQRV9IQU5EU0hBS0UQARIfChtNRVNTQUdFX1RZUEVfQVVUSF9DSEFMTEVOR0UQAhIeChpNRVNTQUdFX1RZUEVfQVVUSF9SRVNQT05TRRADEhgKFE1FU1NBR0VfVFlQRV9NRVNTQUdFEAQSIQodTUVTU0FHRV9UWVBFX0RFTElWRVJZX0NPTkZJUk0QBRIjCh9NRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVFVRVNUEAYSJAogTUVTU0FHRV9UWVBFX0NPTk5FQ1RJT05fUkVTUE9OU0UQBxIaChZNRVNTQUdFX1RZUEVfSEVBUlRCRUFUEAhClwEKDGNvbS5waW5jaC52MUINRW52ZWxvcGVQcm90b1ABWjdnaXRodWIuY29tL3BpbmNoLXByb3RvY29sL3BpbmNoL2dlbi9nby9waW5jaC92MTtwaW5jaHYxogIDUFhYqgIIUGluY2guVjHKAghQaW5jaFxWMeICFFBpbmNoXFYxXEdQQk1ldGFkYXRh6gIJUGluY2g6OlYxYgZwcm90bzM");
+  fileDesc("ChdwaW5jaC92MS9lbnZlbG9wZS5wcm90bxIIcGluY2gudjEi3QUKCEVudmVsb3BlEg8KB3ZlcnNpb24YASABKA0SFAoMZnJvbV9hZGRyZXNzGAIgASgJEhIKCnRvX2FkZHJlc3MYAyABKAkSIwoEdHlwZRgEIAEoDjIVLnBpbmNoLnYxLk1lc3NhZ2VUeXBlEhIKCm1lc3NhZ2VfaWQYBSABKAwSEQoJdGltZXN0YW1wGAYgASgDEi8KCWVuY3J5cHRlZBgKIAEoCzIaLnBpbmNoLnYxLkVuY3J5cHRlZFBheWxvYWRIABIoCgloYW5kc2hha2UYCyABKAsyEy5waW5jaC52MS5IYW5kc2hha2VIABIoCgloZWFydGJlYXQYDCABKAsyEy5waW5jaC52MS5IZWFydGJlYXRIABIxCg5hdXRoX2NoYWxsZW5nZRgNIAEoCzIXLnBpbmNoLnYxLkF1dGhDaGFsbGVuZ2VIABIvCg1hdXRoX3Jlc3BvbnNlGA4gASgLMhYucGluY2gudjEuQXV0aFJlc3BvbnNlSAASKwoLYXV0aF9yZXN1bHQYDyABKAsyFC5waW5jaC52MS5BdXRoUmVzdWx0SAASOQoSY29ubmVjdGlvbl9yZXF1ZXN0GBAgASgLMhsucGluY2gudjEuQ29ubmVjdGlvblJlcXVlc3RIABI7ChNjb25uZWN0aW9uX3Jlc3BvbnNlGBEgASgLMhwucGluY2gudjEuQ29ubmVjdGlvblJlc3BvbnNlSAASNwoRY29ubmVjdGlvbl9yZXZva2UYEiABKAsyGi5waW5jaC52MS5Db25uZWN0aW9uUmV2b2tlSAASOQoSYmxvY2tfbm90aWZpY2F0aW9uGBMgASgLMhsucGluY2gudjEuQmxvY2tOb3RpZmljYXRpb25IABI9ChR1bmJsb2NrX25vdGlmaWNhdGlvbhgUIAEoCzIdLnBpbmNoLnYxLlVuYmxvY2tOb3RpZmljYXRpb25IAEIJCgdwYXlsb2FkIlAKEEVuY3J5cHRlZFBheWxvYWQSDQoFbm9uY2UYASABKAwSEgoKY2lwaGVydGV4dBgCIAEoDBIZChFzZW5kZXJfcHVibGljX2tleRgDIAEoDCJvChBQbGFpbnRleHRQYXlsb2FkEg8KB3ZlcnNpb24YASABKA0SEAoIc2VxdWVuY2UYAiABKAQSEQoJdGltZXN0YW1wGAMgASgDEg8KB2NvbnRlbnQYBCABKAwSFAoMY29udGVudF90eXBlGAUgASgJIkkKCUhhbmRzaGFrZRIPCgd2ZXJzaW9uGAEgASgNEhMKC3NpZ25pbmdfa2V5GAIgASgMEhYKDmVuY3J5cHRpb25fa2V5GAMgASgMIh4KCUhlYXJ0YmVhdBIRCgl0aW1lc3RhbXAYASABKAMiMQoNQXV0aENoYWxsZW5nZRINCgVub25jZRgBIAEoDBIRCgl0aW1lc3RhbXAYAiABKAMiNQoMQXV0aFJlc3BvbnNlEhEKCXNpZ25hdHVyZRgBIAEoDBISCgpwdWJsaWNfa2V5GAIgASgMIk4KCkF1dGhSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBIVCg1lcnJvcl9tZXNzYWdlGAIgASgJEhgKEGFzc2lnbmVkX2FkZHJlc3MYAyABKAkifQoRQ29ubmVjdGlvblJlcXVlc3QSFAoMZnJvbV9hZGRyZXNzGAEgASgJEhIKCnRvX2FkZHJlc3MYAiABKAkSDwoHbWVzc2FnZRgDIAEoCRIZChFzZW5kZXJfcHVibGljX2tleRgEIAEoDBISCgpleHBpcmVzX2F0GAUgASgDIm4KEkNvbm5lY3Rpb25SZXNwb25zZRIUCgxmcm9tX2FkZHJlc3MYASABKAkSEgoKdG9fYWRkcmVzcxgCIAEoCRIQCghhY2NlcHRlZBgDIAEoCBIcChRyZXNwb25kZXJfcHVibGljX2tleRgEIAEoDCI8ChBDb25uZWN0aW9uUmV2b2tlEhQKDGZyb21fYWRkcmVzcxgBIAEoCRISCgp0b19hZGRyZXNzGAIgASgJIkUKEUJsb2NrTm90aWZpY2F0aW9uEhcKD2Jsb2NrZXJfYWRkcmVzcxgBIAEoCRIXCg9ibG9ja2VkX2FkZHJlc3MYAiABKAkiSwoTVW5ibG9ja05vdGlmaWNhdGlvbhIZChF1bmJsb2NrZXJfYWRkcmVzcxgBIAEoCRIZChF1bmJsb2NrZWRfYWRkcmVzcxgCIAEoCSq6AwoLTWVzc2FnZVR5cGUSHAoYTUVTU0FHRV9UWVBFX1VOU1BFQ0lGSUVEEAASGgoWTUVTU0FHRV9UWVBFX0hBTkRTSEFLRRABEh8KG01FU1NBR0VfVFlQRV9BVVRIX0NIQUxMRU5HRRACEh4KGk1FU1NBR0VfVFlQRV9BVVRIX1JFU1BPTlNFEAMSGAoUTUVTU0FHRV9UWVBFX01FU1NBR0UQBBIhCh1NRVNTQUdFX1RZUEVfREVMSVZFUllfQ09ORklSTRAFEiMKH01FU1NBR0VfVFlQRV9DT05ORUNUSU9OX1JFUVVFU1QQBhIkCiBNRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVNQT05TRRAHEhoKFk1FU1NBR0VfVFlQRV9IRUFSVEJFQVQQCBIcChhNRVNTQUdFX1RZUEVfQVVUSF9SRVNVTFQQCRIiCh5NRVNTQUdFX1RZUEVfQ09OTkVDVElPTl9SRVZPS0UQChIjCh9NRVNTQUdFX1RZUEVfQkxPQ0tfTk9USUZJQ0FUSU9OEAsSJQohTUVTU0FHRV9UWVBFX1VOQkxPQ0tfTk9USUZJQ0FUSU9OEAxClwEKDGNvbS5waW5jaC52MUINRW52ZWxvcGVQcm90b1ABWjdnaXRodWIuY29tL3BpbmNoLXByb3RvY29sL3BpbmNoL2dlbi9nby9waW5jaC92MTtwaW5jaHYxogIDUFhYqgIIUGluY2guVjHKAghQaW5jaFxWMeICFFBpbmNoXFYxXEdQQk1ldGFkYXRh6gIJUGluY2g6OlYxYgZwcm90bzM");
 
 /**
  * Envelope is the outer wire message. The relay can read this for routing
@@ -70,6 +70,54 @@ export type Envelope = Message<"pinch.v1.Envelope"> & {
      */
     value: Heartbeat;
     case: "heartbeat";
+  } | {
+    /**
+     * @generated from field: pinch.v1.AuthChallenge auth_challenge = 13;
+     */
+    value: AuthChallenge;
+    case: "authChallenge";
+  } | {
+    /**
+     * @generated from field: pinch.v1.AuthResponse auth_response = 14;
+     */
+    value: AuthResponse;
+    case: "authResponse";
+  } | {
+    /**
+     * @generated from field: pinch.v1.AuthResult auth_result = 15;
+     */
+    value: AuthResult;
+    case: "authResult";
+  } | {
+    /**
+     * @generated from field: pinch.v1.ConnectionRequest connection_request = 16;
+     */
+    value: ConnectionRequest;
+    case: "connectionRequest";
+  } | {
+    /**
+     * @generated from field: pinch.v1.ConnectionResponse connection_response = 17;
+     */
+    value: ConnectionResponse;
+    case: "connectionResponse";
+  } | {
+    /**
+     * @generated from field: pinch.v1.ConnectionRevoke connection_revoke = 18;
+     */
+    value: ConnectionRevoke;
+    case: "connectionRevoke";
+  } | {
+    /**
+     * @generated from field: pinch.v1.BlockNotification block_notification = 19;
+     */
+    value: BlockNotification;
+    case: "blockNotification";
+  } | {
+    /**
+     * @generated from field: pinch.v1.UnblockNotification unblock_notification = 20;
+     */
+    value: UnblockNotification;
+    case: "unblockNotification";
   } | { case: undefined; value?: undefined };
 };
 
@@ -199,6 +247,247 @@ export const HeartbeatSchema: GenMessage<Heartbeat> = /*@__PURE__*/
   messageDesc(file_pinch_v1_envelope, 4);
 
 /**
+ * AuthChallenge is sent by the relay after WebSocket upgrade.
+ * The client must sign the nonce with its Ed25519 private key.
+ *
+ * @generated from message pinch.v1.AuthChallenge
+ */
+export type AuthChallenge = Message<"pinch.v1.AuthChallenge"> & {
+  /**
+   * 32-byte random challenge
+   *
+   * @generated from field: bytes nonce = 1;
+   */
+  nonce: Uint8Array;
+
+  /**
+   * server timestamp for timeout tracking
+   *
+   * @generated from field: int64 timestamp = 2;
+   */
+  timestamp: bigint;
+};
+
+/**
+ * Describes the message pinch.v1.AuthChallenge.
+ * Use `create(AuthChallengeSchema)` to create a new message.
+ */
+export const AuthChallengeSchema: GenMessage<AuthChallenge> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 5);
+
+/**
+ * AuthResponse is the client's signed response to an AuthChallenge.
+ *
+ * @generated from message pinch.v1.AuthResponse
+ */
+export type AuthResponse = Message<"pinch.v1.AuthResponse"> & {
+  /**
+   * 64-byte Ed25519 signature of the nonce
+   *
+   * @generated from field: bytes signature = 1;
+   */
+  signature: Uint8Array;
+
+  /**
+   * 32-byte Ed25519 public key
+   *
+   * @generated from field: bytes public_key = 2;
+   */
+  publicKey: Uint8Array;
+};
+
+/**
+ * Describes the message pinch.v1.AuthResponse.
+ * Use `create(AuthResponseSchema)` to create a new message.
+ */
+export const AuthResponseSchema: GenMessage<AuthResponse> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 6);
+
+/**
+ * AuthResult is sent by the relay after verifying the AuthResponse.
+ *
+ * @generated from message pinch.v1.AuthResult
+ */
+export type AuthResult = Message<"pinch.v1.AuthResult"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * only populated on failure
+   *
+   * @generated from field: string error_message = 2;
+   */
+  errorMessage: string;
+
+  /**
+   * the pinch: address derived from pubkey
+   *
+   * @generated from field: string assigned_address = 3;
+   */
+  assignedAddress: string;
+};
+
+/**
+ * Describes the message pinch.v1.AuthResult.
+ * Use `create(AuthResultSchema)` to create a new message.
+ */
+export const AuthResultSchema: GenMessage<AuthResult> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 7);
+
+/**
+ * ConnectionRequest is sent by an agent to request a connection with another agent.
+ *
+ * @generated from message pinch.v1.ConnectionRequest
+ */
+export type ConnectionRequest = Message<"pinch.v1.ConnectionRequest"> & {
+  /**
+   * @generated from field: string from_address = 1;
+   */
+  fromAddress: string;
+
+  /**
+   * @generated from field: string to_address = 2;
+   */
+  toAddress: string;
+
+  /**
+   * free-text short message, max 280 chars enforced at application level
+   *
+   * @generated from field: string message = 3;
+   */
+  message: string;
+
+  /**
+   * @generated from field: bytes sender_public_key = 4;
+   */
+  senderPublicKey: Uint8Array;
+
+  /**
+   * Unix timestamp for 7-day TTL
+   *
+   * @generated from field: int64 expires_at = 5;
+   */
+  expiresAt: bigint;
+};
+
+/**
+ * Describes the message pinch.v1.ConnectionRequest.
+ * Use `create(ConnectionRequestSchema)` to create a new message.
+ */
+export const ConnectionRequestSchema: GenMessage<ConnectionRequest> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 8);
+
+/**
+ * ConnectionResponse is the recipient's response to a ConnectionRequest.
+ *
+ * @generated from message pinch.v1.ConnectionResponse
+ */
+export type ConnectionResponse = Message<"pinch.v1.ConnectionResponse"> & {
+  /**
+   * @generated from field: string from_address = 1;
+   */
+  fromAddress: string;
+
+  /**
+   * @generated from field: string to_address = 2;
+   */
+  toAddress: string;
+
+  /**
+   * @generated from field: bool accepted = 3;
+   */
+  accepted: boolean;
+
+  /**
+   * only populated if accepted
+   *
+   * @generated from field: bytes responder_public_key = 4;
+   */
+  responderPublicKey: Uint8Array;
+};
+
+/**
+ * Describes the message pinch.v1.ConnectionResponse.
+ * Use `create(ConnectionResponseSchema)` to create a new message.
+ */
+export const ConnectionResponseSchema: GenMessage<ConnectionResponse> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 9);
+
+/**
+ * ConnectionRevoke severs a connection between two agents without blocking.
+ *
+ * @generated from message pinch.v1.ConnectionRevoke
+ */
+export type ConnectionRevoke = Message<"pinch.v1.ConnectionRevoke"> & {
+  /**
+   * @generated from field: string from_address = 1;
+   */
+  fromAddress: string;
+
+  /**
+   * @generated from field: string to_address = 2;
+   */
+  toAddress: string;
+};
+
+/**
+ * Describes the message pinch.v1.ConnectionRevoke.
+ * Use `create(ConnectionRevokeSchema)` to create a new message.
+ */
+export const ConnectionRevokeSchema: GenMessage<ConnectionRevoke> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 10);
+
+/**
+ * BlockNotification informs the relay that an agent has blocked another.
+ *
+ * @generated from message pinch.v1.BlockNotification
+ */
+export type BlockNotification = Message<"pinch.v1.BlockNotification"> & {
+  /**
+   * @generated from field: string blocker_address = 1;
+   */
+  blockerAddress: string;
+
+  /**
+   * @generated from field: string blocked_address = 2;
+   */
+  blockedAddress: string;
+};
+
+/**
+ * Describes the message pinch.v1.BlockNotification.
+ * Use `create(BlockNotificationSchema)` to create a new message.
+ */
+export const BlockNotificationSchema: GenMessage<BlockNotification> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 11);
+
+/**
+ * UnblockNotification informs the relay that an agent has unblocked another.
+ *
+ * @generated from message pinch.v1.UnblockNotification
+ */
+export type UnblockNotification = Message<"pinch.v1.UnblockNotification"> & {
+  /**
+   * @generated from field: string unblocker_address = 1;
+   */
+  unblockerAddress: string;
+
+  /**
+   * @generated from field: string unblocked_address = 2;
+   */
+  unblockedAddress: string;
+};
+
+/**
+ * Describes the message pinch.v1.UnblockNotification.
+ * Use `create(UnblockNotificationSchema)` to create a new message.
+ */
+export const UnblockNotificationSchema: GenMessage<UnblockNotification> = /*@__PURE__*/
+  messageDesc(file_pinch_v1_envelope, 12);
+
+/**
  * MessageType enumerates all wire message types.
  *
  * @generated from enum pinch.v1.MessageType
@@ -248,6 +537,26 @@ export enum MessageType {
    * @generated from enum value: MESSAGE_TYPE_HEARTBEAT = 8;
    */
   HEARTBEAT = 8,
+
+  /**
+   * @generated from enum value: MESSAGE_TYPE_AUTH_RESULT = 9;
+   */
+  AUTH_RESULT = 9,
+
+  /**
+   * @generated from enum value: MESSAGE_TYPE_CONNECTION_REVOKE = 10;
+   */
+  CONNECTION_REVOKE = 10,
+
+  /**
+   * @generated from enum value: MESSAGE_TYPE_BLOCK_NOTIFICATION = 11;
+   */
+  BLOCK_NOTIFICATION = 11,
+
+  /**
+   * @generated from enum value: MESSAGE_TYPE_UNBLOCK_NOTIFICATION = 12;
+   */
+  UNBLOCK_NOTIFICATION = 12,
 }
 
 /**

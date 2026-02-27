@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"crypto/ed25519"
 	"log/slog"
 	"time"
 
@@ -29,34 +30,35 @@ const (
 // Each client has its own read, write, and heartbeat goroutines
 // managed by a shared context.
 type Client struct {
-	hub     *Hub
-	conn    *websocket.Conn
-	address string
-	send    chan []byte
-	ctx     context.Context
-	cancel  context.CancelFunc
+	hub       *Hub
+	conn      *websocket.Conn
+	address   string
+	PublicKey ed25519.PublicKey
+	send      chan []byte
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // NewClient creates a new Client bound to the given hub and WebSocket connection.
-// The address is the pinch: address claimed by the connecting agent.
+// The address is the pinch: address derived from the authenticated public key.
+// The pubKey is the Ed25519 public key verified during the auth handshake.
 // The provided context controls the client's lifecycle; cancelling it
 // stops all client goroutines.
-func NewClient(hub *Hub, conn *websocket.Conn, address string, ctx context.Context) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, address string, pubKey ed25519.PublicKey, ctx context.Context) *Client {
 	clientCtx, cancel := context.WithCancel(ctx)
 	return &Client{
-		hub:     hub,
-		conn:    conn,
-		address: address,
-		send:    make(chan []byte, sendBufferSize),
-		ctx:     clientCtx,
-		cancel:  cancel,
+		hub:       hub,
+		conn:      conn,
+		address:   address,
+		PublicKey: pubKey,
+		send:      make(chan []byte, sendBufferSize),
+		ctx:       clientCtx,
+		cancel:    cancel,
 	}
 }
 
-// ReadPump reads messages from the WebSocket connection.
-// For Phase 1, received messages are discarded -- this goroutine
-// exists to detect disconnection and keep the connection alive.
-// When ReadPump exits, the client is unregistered from the hub.
+// ReadPump reads messages from the WebSocket connection and routes them
+// through the hub. When ReadPump exits, the client is unregistered.
 func (c *Client) ReadPump() {
 	defer func() {
 		c.hub.Unregister(c)
@@ -64,7 +66,7 @@ func (c *Client) ReadPump() {
 
 	for {
 		readCtx, readCancel := context.WithTimeout(c.ctx, readTimeout)
-		_, _, err := c.conn.Read(readCtx)
+		_, data, err := c.conn.Read(readCtx)
 		readCancel()
 		if err != nil {
 			if c.ctx.Err() == nil {
@@ -75,7 +77,12 @@ func (c *Client) ReadPump() {
 			}
 			return
 		}
-		// Phase 1: discard received messages (no routing yet)
+		if err := c.hub.RouteMessage(c, data); err != nil {
+			slog.Debug("route error",
+				"address", c.address,
+				"error", err,
+			)
+		}
 	}
 }
 
@@ -132,6 +139,18 @@ func (c *Client) HeartbeatLoop() {
 				return
 			}
 		}
+	}
+}
+
+// Send writes data to the client's outbound channel. If the channel
+// is full, the message is dropped to prevent blocking the sender.
+func (c *Client) Send(data []byte) {
+	select {
+	case c.send <- data:
+	default:
+		slog.Debug("send buffer full, dropping message",
+			"address", c.address,
+		)
 	}
 }
 

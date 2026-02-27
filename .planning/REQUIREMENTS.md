@@ -23,7 +23,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Relay
 
 - [x] **RELY-01**: Go relay server accepts WebSocket connections and routes encrypted blobs without inspecting content
-- [ ] **RELY-02**: Relay authenticates agents via Ed25519 challenge-response (relay sends nonce, agent signs, relay verifies)
+- [x] **RELY-02**: Relay authenticates agents via Ed25519 challenge-response (relay sends nonce, agent signs, relay verifies)
 - [x] **RELY-03**: Relay maintains a hub routing table mapping `pinch:` addresses to active WebSocket connections
 - [ ] **RELY-04**: Relay delivers messages in real-time when both agents are online (sub-100ms relay hop)
 - [ ] **RELY-05**: Relay queues encrypted messages in bbolt for offline agents with configurable TTL (7-day default)
@@ -41,17 +41,17 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Connection
 
-- [ ] **CONN-01**: Agent can send a connection request to another agent's `pinch:` address
-- [ ] **CONN-02**: Receiving agent's human sees connection request and can approve or reject
-- [ ] **CONN-03**: On approval, agents exchange public keys and the connection is established
-- [ ] **CONN-04**: Agent can block a connection -- relay rejects all messages from blocked pubkey
+- [x] **CONN-01**: Agent can send a connection request to another agent's `pinch:` address
+- [x] **CONN-02**: Receiving agent's human sees connection request and can approve or reject
+- [x] **CONN-03**: On approval, agents exchange public keys and the connection is established
+- [x] **CONN-04**: Agent can block a connection -- relay rejects all messages from blocked pubkey
 - [ ] **CONN-05**: Agent can mute a connection -- messages still delivered but not surfaced to agent/human
-- [ ] **CONN-06**: Either party can revoke a connection at any time, severing the channel without blocking
+- [x] **CONN-06**: Either party can revoke a connection at any time, severing the channel without blocking
 
 ### Autonomy
 
-- [ ] **AUTO-01**: Each connection has a configurable autonomy level: Full Manual, Notify, Auto-respond, or Full Auto
-- [ ] **AUTO-02**: New connections default to Full Manual -- human approves every inbound message
+- [x] **AUTO-01**: Each connection has a configurable autonomy level: Full Manual, Notify, Auto-respond, or Full Auto
+- [x] **AUTO-02**: New connections default to Full Manual -- human approves every inbound message
 - [ ] **AUTO-03**: Full Manual: agent queues inbound messages for human approval before processing
 - [ ] **AUTO-04**: Notify: agent processes messages autonomously and notifies human of actions taken
 - [ ] **AUTO-05**: Auto-respond: agent handles messages within configured rules, logs everything
@@ -128,7 +128,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROT-03 | Phase 1 | Complete |
 | PROT-04 | Phase 1 | Complete |
 | RELY-01 | Phase 1 | Complete |
-| RELY-02 | Phase 2 | Pending |
+| RELY-02 | Phase 2 | Complete |
 | RELY-03 | Phase 1 | Complete |
 | RELY-04 | Phase 3 | Pending |
 | RELY-05 | Phase 4 | Pending |
@@ -140,14 +140,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CRYP-03 | Phase 1 | Complete |
 | CRYP-04 | Phase 1 | Complete |
 | CRYP-05 | Phase 3 | Pending |
-| CONN-01 | Phase 2 | Pending |
-| CONN-02 | Phase 2 | Pending |
-| CONN-03 | Phase 2 | Pending |
-| CONN-04 | Phase 2 | Pending |
+| CONN-01 | Phase 2 | Complete |
+| CONN-02 | Phase 2 | Complete |
+| CONN-03 | Phase 2 | Complete |
+| CONN-04 | Phase 2 | Complete |
 | CONN-05 | Phase 6 | Pending |
-| CONN-06 | Phase 2 | Pending |
-| AUTO-01 | Phase 2 | Pending |
-| AUTO-02 | Phase 2 | Pending |
+| CONN-06 | Phase 2 | Complete |
+| AUTO-01 | Phase 2 | Complete |
+| AUTO-02 | Phase 2 | Complete |
 | AUTO-03 | Phase 5 | Pending |
 | AUTO-04 | Phase 5 | Pending |
 | AUTO-05 | Phase 5 | Pending |
