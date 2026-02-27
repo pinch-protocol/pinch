@@ -69,6 +69,11 @@ func main() {
 		}
 	}
 
+	devMode := os.Getenv("PINCH_RELAY_DEV") == "1"
+	if devMode {
+		slog.Warn("development mode enabled: WebSocket origin verification disabled")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -101,7 +106,7 @@ func main() {
 	go h.Run(ctx)
 
 	r := chi.NewRouter()
-	r.Get("/ws", wsHandler(ctx, h, relayHost))
+	r.Get("/ws", wsHandler(ctx, h, relayHost, devMode))
 	r.Get("/health", healthHandler(h))
 
 	srv := &http.Server{
@@ -141,11 +146,11 @@ const authTimeout = 10 * time.Second
 //  4. Register authenticated client in hub
 //
 // Unauthenticated clients are never registered in the hub routing table.
-func wsHandler(serverCtx context.Context, h *hub.Hub, relayHost string) http.HandlerFunc {
+func wsHandler(serverCtx context.Context, h *hub.Hub, relayHost string, devMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			// Allow connections from any origin in development.
-			InsecureSkipVerify: true,
+			// Allow connections from any origin when PINCH_RELAY_DEV=1.
+			InsecureSkipVerify: devMode,
 		})
 		if err != nil {
 			slog.Error("websocket accept error", "error", err)
