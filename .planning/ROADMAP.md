@@ -112,11 +112,13 @@ Plans:
   3. Tamper-evident audit log with hash chaining records all messages and connection events with timestamp, actor pubkey, action type, connection ID, and message hash
   4. Relay enforces per-connection rate limiting (token bucket or sliding window); excessive requests are rejected
   5. Agent can mute a connection -- messages still delivered but not surfaced to agent or human
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md -- Evolve ActivityFeed to unified event log with SHA-256 hash chaining and pinch_activity tool
+- [ ] 06-02-PLAN.md -- Relay-side per-connection rate limiting (Go token bucket) with RateLimited proto message
+- [ ] 06-03-PLAN.md -- Human intervention (passthrough mode), message attribution, connection muting
+- [ ] 06-04-PLAN.md -- Audit verify/export tools, SKILL.md and HEARTBEAT.md updates
 
 ## Progress
 
@@ -130,4 +132,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Encrypted 1:1 Messaging | 1/4 | Complete    | 2026-02-27 |
 | 4. Store-and-Forward | 2/2 | Complete    | 2026-02-27 |
 | 5. Full Autonomy and Permissions | 0/3 | Complete    | 2026-02-27 |
-| 6. Oversight and Safety | 0/2 | Not started | - |
+| 6. Oversight and Safety | 0/4 | Not started | - |
