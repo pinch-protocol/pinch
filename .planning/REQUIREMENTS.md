@@ -45,7 +45,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CONN-02**: Receiving agent's human sees connection request and can approve or reject
 - [x] **CONN-03**: On approval, agents exchange public keys and the connection is established
 - [x] **CONN-04**: Agent can block a connection -- relay rejects all messages from blocked pubkey
-- [ ] **CONN-05**: Agent can mute a connection -- messages still delivered but not surfaced to agent/human
+- [x] **CONN-05**: Agent can mute a connection -- messages still delivered but not surfaced to agent/human
 - [x] **CONN-06**: Either party can revoke a connection at any time, severing the channel without blocking
 
 ### Autonomy
@@ -65,8 +65,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **OVRS-01**: Human can view an activity feed showing all sent/received messages and connection events
 - [x] **OVRS-02**: Activity feed is filterable by connection, time range, and message type
-- [ ] **OVRS-03**: Human can intervene in any conversation -- take over and send messages directly
-- [ ] **OVRS-04**: Messages are attributed as agent-sent or human-sent for conversation clarity
+- [x] **OVRS-03**: Human can intervene in any conversation -- take over and send messages directly
+- [x] **OVRS-04**: Messages are attributed as agent-sent or human-sent for conversation clarity
 - [x] **OVRS-05**: Tamper-evident audit log with hash chaining records all messages and connection events
 - [x] **OVRS-06**: Audit log entries include: timestamp, actor pubkey, action type, connection ID, message hash
 
@@ -144,7 +144,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONN-02 | Phase 2 | Complete |
 | CONN-03 | Phase 2 | Complete |
 | CONN-04 | Phase 2 | Complete |
-| CONN-05 | Phase 6 | Pending |
+| CONN-05 | Phase 6 | Complete |
 | CONN-06 | Phase 2 | Complete |
 | AUTO-01 | Phase 2 | Complete |
 | AUTO-02 | Phase 2 | Complete |
@@ -158,8 +158,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTO-10 | Phase 5 | Complete |
 | OVRS-01 | Phase 6 | Complete |
 | OVRS-02 | Phase 6 | Complete |
-| OVRS-03 | Phase 6 | Pending |
-| OVRS-04 | Phase 6 | Pending |
+| OVRS-03 | Phase 6 | Complete |
+| OVRS-04 | Phase 6 | Complete |
 | OVRS-05 | Phase 6 | Complete |
 | OVRS-06 | Phase 6 | Complete |
 | SKIL-01 | Phase 3 | Complete |

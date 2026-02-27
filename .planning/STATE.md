@@ -12,16 +12,16 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 Phase: 6 of 6 (Oversight and Safety)
 Plan: 4 of 4 in current phase (complete)
 Status: Executing
-Last activity: 2026-02-27 -- Completed 06-04-PLAN.md
+Last activity: 2026-02-27 -- Completed 06-03-PLAN.md
 
 Progress: [████████████████████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 6min
-- Total execution time: 2.0 hours
+- Total execution time: 2.2 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [███████████████████████
 | 03 | 4 | 23min | 6min |
 | 04 | 2 | 15min | 8min |
 | 05 | 3 | 15min | 5min |
-| 06 | 3 | 11min | 4min |
+| 06 | 4 | 23min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (5min), 06-01 (4min), 06-02 (4min), 06-04 (3min)
+- Last 5 plans: 06-01 (4min), 06-02 (4min), 06-04 (3min), 06-03 (12min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -55,6 +55,7 @@ Progress: [███████████████████████
 | Phase 06 P01 | 4min | 2 tasks | 5 files |
 | Phase 06 P02 | 4min | 2 tasks | 10 files |
 | Phase 06 P04 | 3min | 2 tasks | 6 files |
+| Phase 06 P03 | 12min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,10 @@ Recent decisions affecting current work:
 - [06-02]: Rate limit check BEFORE envelope size check for fastest rejection path
 - [06-02]: Lazy limiter creation per address (memory proportional to active clients)
 - [06-02]: TypeScript handler logs only (no backoff in v1 -- rate limits for obvious abuse)
+- [06-03]: Mute check runs before passthrough check, which runs before permissions check (Step 0, 0b, then 1)
+- [06-03]: Muted + passthrough: mute takes precedence since mute check is first in pipeline
+- [06-03]: clearPassthroughFlags() is async and calls save() to persist cleared state to disk
+- [06-03]: Structured content uses application/x-pinch+json content type as forward-compatible signal
 - [06-04]: No changes to cli.ts bootstrap -- ActivityFeed evolves in-place via initSchema()
 - [06-04]: Tail verification skips genesis prev_hash check (partial chain starts at arbitrary point)
 - [06-04]: Export uses raw SQL column names (snake_case) in JSON for independent verification
@@ -145,5 +150,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 06-04-PLAN.md
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
