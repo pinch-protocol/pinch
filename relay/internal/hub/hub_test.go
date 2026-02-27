@@ -2,6 +2,7 @@ package hub_test
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 	pinchv1 "github.com/pinch-protocol/pinch/gen/go/pinch/v1"
+	"github.com/pinch-protocol/pinch/relay/internal/auth"
 	"github.com/pinch-protocol/pinch/relay/internal/hub"
 	"github.com/pinch-protocol/pinch/relay/internal/store"
 	"google.golang.org/protobuf/proto"
@@ -706,5 +708,496 @@ func TestBlockedSenderReceivesNoErrorIndication(t *testing.T) {
 	readCancel()
 	if err == nil {
 		t.Fatal("expected alice to NOT receive any response (silent drop)")
+	}
+}
+
+// --- Auth handshake integration tests ---
+
+// newAuthTestServer creates an httptest.Server that performs the real
+// Ed25519 challenge-response auth handshake before registering clients.
+func newAuthTestServer(t *testing.T, ctx context.Context) (*httptest.Server, *hub.Hub, *store.BlockStore) {
+	t.Helper()
+
+	dbPath := filepath.Join(t.TempDir(), "test-auth-blocks.db")
+	bs, err := store.NewBlockStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewBlockStore: %v", err)
+	}
+	t.Cleanup(func() { bs.Close() })
+
+	h := hub.NewHub(bs)
+	go h.Run(ctx)
+
+	const relayHost = "localhost"
+
+	r := chi.NewRouter()
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Logf("websocket accept error: %v", err)
+			return
+		}
+
+		// Perform real auth handshake.
+		authCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		// Step 1: Generate and send challenge.
+		nonce, err := auth.GenerateChallenge()
+		if err != nil {
+			conn.Close(websocket.StatusInternalError, "internal error")
+			return
+		}
+
+		challengeEnv := &pinchv1.Envelope{
+			Version: 1,
+			Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_CHALLENGE,
+			Payload: &pinchv1.Envelope_AuthChallenge{
+				AuthChallenge: &pinchv1.AuthChallenge{
+					Nonce:     nonce,
+					Timestamp: time.Now().Unix(),
+				},
+			},
+		}
+		challengeData, _ := proto.Marshal(challengeEnv)
+		if err := conn.Write(authCtx, websocket.MessageBinary, challengeData); err != nil {
+			return
+		}
+
+		// Step 2: Read AuthResponse.
+		_, responseData, err := conn.Read(authCtx)
+		if err != nil {
+			return
+		}
+
+		var responseEnv pinchv1.Envelope
+		if err := proto.Unmarshal(responseData, &responseEnv); err != nil {
+			conn.Close(websocket.StatusProtocolError, "invalid message")
+			return
+		}
+
+		authResp := responseEnv.GetAuthResponse()
+		if authResp == nil {
+			sendAuthFailureHelper(authCtx, conn, "expected AuthResponse")
+			conn.Close(websocket.StatusProtocolError, "unexpected type")
+			return
+		}
+
+		pubKey := ed25519.PublicKey(authResp.PublicKey)
+		signature := authResp.Signature
+
+		// Step 3: Verify.
+		if !auth.VerifyChallenge(pubKey, nonce, signature) {
+			sendAuthFailureHelper(authCtx, conn, "signature verification failed")
+			conn.Close(4001, "auth failed")
+			return
+		}
+
+		// Step 4: Derive address and send result.
+		address := auth.DeriveAddress(pubKey, relayHost)
+
+		resultEnv := &pinchv1.Envelope{
+			Version: 1,
+			Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_RESULT,
+			Payload: &pinchv1.Envelope_AuthResult{
+				AuthResult: &pinchv1.AuthResult{
+					Success:         true,
+					AssignedAddress: address,
+				},
+			},
+		}
+		resultData, _ := proto.Marshal(resultEnv)
+		if err := conn.Write(authCtx, websocket.MessageBinary, resultData); err != nil {
+			return
+		}
+
+		// Register after successful auth.
+		client := hub.NewClient(h, conn, address, pubKey, ctx)
+		h.Register(client)
+		go client.ReadPump()
+		go client.WritePump()
+		go client.HeartbeatLoop()
+	})
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(func() { srv.Close() })
+	return srv, h, bs
+}
+
+func sendAuthFailureHelper(ctx context.Context, conn *websocket.Conn, errMsg string) {
+	env := &pinchv1.Envelope{
+		Version: 1,
+		Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_RESULT,
+		Payload: &pinchv1.Envelope_AuthResult{
+			AuthResult: &pinchv1.AuthResult{
+				Success:      false,
+				ErrorMessage: errMsg,
+			},
+		},
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		return
+	}
+	_ = conn.Write(ctx, websocket.MessageBinary, data)
+}
+
+// dialAuthWS performs the full client-side auth handshake (like the TS RelayClient).
+// Returns the WebSocket connection, assigned address, and any error.
+func dialAuthWS(ctx context.Context, srv *httptest.Server, privKey ed25519.PrivateKey, pubKey ed25519.PublicKey) (*websocket.Conn, string, error) {
+	url := "ws" + srv.URL[len("http"):] + "/ws"
+	conn, _, err := websocket.Dial(ctx, url, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Read AuthChallenge.
+	readCtx, readCancel := context.WithTimeout(ctx, 5*time.Second)
+	_, challengeData, err := conn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("read challenge: %w", err)
+	}
+
+	var challengeEnv pinchv1.Envelope
+	if err := proto.Unmarshal(challengeData, &challengeEnv); err != nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("unmarshal challenge: %w", err)
+	}
+
+	challenge := challengeEnv.GetAuthChallenge()
+	if challenge == nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("expected AuthChallenge, got %T", challengeEnv.Payload)
+	}
+
+	// Sign the nonce.
+	signature := ed25519.Sign(privKey, challenge.Nonce)
+
+	// Send AuthResponse.
+	responseEnv := &pinchv1.Envelope{
+		Version: 1,
+		Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_RESPONSE,
+		Payload: &pinchv1.Envelope_AuthResponse{
+			AuthResponse: &pinchv1.AuthResponse{
+				Signature: signature,
+				PublicKey: pubKey,
+			},
+		},
+	}
+	responseData, _ := proto.Marshal(responseEnv)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
+	err = conn.Write(writeCtx, websocket.MessageBinary, responseData)
+	writeCancel()
+	if err != nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("write response: %w", err)
+	}
+
+	// Read AuthResult.
+	readCtx2, readCancel2 := context.WithTimeout(ctx, 5*time.Second)
+	_, resultData, err := conn.Read(readCtx2)
+	readCancel2()
+	if err != nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("read result: %w", err)
+	}
+
+	var resultEnv pinchv1.Envelope
+	if err := proto.Unmarshal(resultData, &resultEnv); err != nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("unmarshal result: %w", err)
+	}
+
+	result := resultEnv.GetAuthResult()
+	if result == nil {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("expected AuthResult")
+	}
+	if !result.Success {
+		conn.Close(websocket.StatusAbnormalClosure, "")
+		return nil, "", fmt.Errorf("auth failed: %s", result.ErrorMessage)
+	}
+
+	return conn, result.AssignedAddress, nil
+}
+
+func TestAuthHandshakeSuccess(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newAuthTestServer(t, ctx)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	conn, address, err := dialAuthWS(ctx, srv, priv, pub)
+	if err != nil {
+		t.Fatalf("dialAuthWS: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+
+	// Verify assigned address format.
+	if len(address) < len("pinch:x@localhost") {
+		t.Fatalf("address too short: %q", address)
+	}
+	if address[:6] != "pinch:" {
+		t.Fatalf("address does not start with 'pinch:': %q", address)
+	}
+
+	waitForClientCount(t, h, 1, 2*time.Second)
+}
+
+func TestAuthHandshakeBadSignature(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, _, _ := newAuthTestServer(t, ctx)
+
+	pub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	// Use a different private key to produce an invalid signature.
+	_, wrongPriv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	_, _, err = dialAuthWS(ctx, srv, wrongPriv, pub)
+	if err == nil {
+		t.Fatal("expected auth failure with wrong private key, got success")
+	}
+}
+
+func TestAuthHandshakeTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create a server with a very short auth timeout.
+	dbPath := filepath.Join(t.TempDir(), "test-timeout-blocks.db")
+	bs, err := store.NewBlockStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewBlockStore: %v", err)
+	}
+	t.Cleanup(func() { bs.Close() })
+
+	h := hub.NewHub(bs)
+	go h.Run(ctx)
+
+	r := chi.NewRouter()
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			return
+		}
+
+		// Very short auth timeout for testing.
+		authCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+		defer cancel()
+
+		nonce, _ := auth.GenerateChallenge()
+		challengeEnv := &pinchv1.Envelope{
+			Version: 1,
+			Type:    pinchv1.MessageType_MESSAGE_TYPE_AUTH_CHALLENGE,
+			Payload: &pinchv1.Envelope_AuthChallenge{
+				AuthChallenge: &pinchv1.AuthChallenge{Nonce: nonce},
+			},
+		}
+		challengeData, _ := proto.Marshal(challengeEnv)
+		if err := conn.Write(authCtx, websocket.MessageBinary, challengeData); err != nil {
+			return
+		}
+
+		// Wait for response (which will time out since client doesn't respond).
+		_, _, readErr := conn.Read(authCtx)
+		if readErr != nil {
+			conn.Close(websocket.StatusPolicyViolation, "auth timeout")
+			return
+		}
+	})
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(func() { srv.Close() })
+
+	// Connect but don't send AuthResponse -- should time out.
+	url := "ws" + srv.URL[len("http"):] + "/ws"
+	conn, _, err := websocket.Dial(ctx, url, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	// Read the challenge.
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	_, _, err = conn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("read challenge: %v", err)
+	}
+
+	// Don't send a response -- wait for timeout.
+	// The server should close the connection.
+	readCtx2, readCancel2 := context.WithTimeout(ctx, 2*time.Second)
+	_, _, err = conn.Read(readCtx2)
+	readCancel2()
+	if err == nil {
+		t.Fatal("expected connection to be closed after auth timeout")
+	}
+
+	// No client should be registered.
+	if h.ClientCount() != 0 {
+		t.Fatalf("expected 0 clients after auth timeout, got %d", h.ClientCount())
+	}
+}
+
+func TestAuthRouteConnectionRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newAuthTestServer(t, ctx)
+
+	// Connect Alice and Bob via auth handshake.
+	alicePub, alicePriv, _ := ed25519.GenerateKey(nil)
+	aliceConn, aliceAddr, err := dialAuthWS(ctx, srv, alicePriv, alicePub)
+	if err != nil {
+		t.Fatalf("alice auth: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobPub, bobPriv, _ := ed25519.GenerateKey(nil)
+	bobConn, bobAddr, err := dialAuthWS(ctx, srv, bobPriv, bobPub)
+	if err != nil {
+		t.Fatalf("bob auth: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Alice sends a ConnectionRequest to Bob.
+	connReqEnv := &pinchv1.Envelope{
+		Version:     1,
+		FromAddress: aliceAddr,
+		ToAddress:   bobAddr,
+		Type:        pinchv1.MessageType_MESSAGE_TYPE_CONNECTION_REQUEST,
+		Payload: &pinchv1.Envelope_ConnectionRequest{
+			ConnectionRequest: &pinchv1.ConnectionRequest{
+				FromAddress:     aliceAddr,
+				ToAddress:       bobAddr,
+				Message:         "Hello from Alice",
+				SenderPublicKey: alicePub,
+				ExpiresAt:       time.Now().Add(7 * 24 * time.Hour).Unix(),
+			},
+		},
+	}
+	reqData, _ := proto.Marshal(connReqEnv)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx, websocket.MessageBinary, reqData)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write connection request: %v", err)
+	}
+
+	// Bob should receive the ConnectionRequest.
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	_, receivedData, err := bobConn.Read(readCtx)
+	readCancel()
+	if err != nil {
+		t.Fatalf("bob read: %v", err)
+	}
+
+	var received pinchv1.Envelope
+	if err := proto.Unmarshal(receivedData, &received); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if received.Type != pinchv1.MessageType_MESSAGE_TYPE_CONNECTION_REQUEST {
+		t.Fatalf("expected CONNECTION_REQUEST type, got %v", received.Type)
+	}
+	connReq := received.GetConnectionRequest()
+	if connReq == nil {
+		t.Fatal("expected ConnectionRequest payload")
+	}
+	if connReq.FromAddress != aliceAddr {
+		t.Fatalf("expected from %s, got %s", aliceAddr, connReq.FromAddress)
+	}
+	if connReq.Message != "Hello from Alice" {
+		t.Fatalf("expected message 'Hello from Alice', got %q", connReq.Message)
+	}
+}
+
+func TestAuthBlockEnforcementViaNotification(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	srv, h, _ := newAuthTestServer(t, ctx)
+
+	// Connect Alice and Bob via auth handshake.
+	alicePub, alicePriv, _ := ed25519.GenerateKey(nil)
+	aliceConn, aliceAddr, err := dialAuthWS(ctx, srv, alicePriv, alicePub)
+	if err != nil {
+		t.Fatalf("alice auth: %v", err)
+	}
+	defer aliceConn.Close(websocket.StatusNormalClosure, "done")
+
+	bobPub, bobPriv, _ := ed25519.GenerateKey(nil)
+	bobConn, bobAddr, err := dialAuthWS(ctx, srv, bobPriv, bobPub)
+	if err != nil {
+		t.Fatalf("bob auth: %v", err)
+	}
+	defer bobConn.Close(websocket.StatusNormalClosure, "done")
+
+	waitForClientCount(t, h, 2, 2*time.Second)
+
+	// Bob sends a BlockNotification to block Alice.
+	blockEnv := &pinchv1.Envelope{
+		Version:     1,
+		FromAddress: bobAddr,
+		Type:        pinchv1.MessageType_MESSAGE_TYPE_BLOCK_NOTIFICATION,
+		Payload: &pinchv1.Envelope_BlockNotification{
+			BlockNotification: &pinchv1.BlockNotification{
+				BlockerAddress: bobAddr,
+				BlockedAddress: aliceAddr,
+			},
+		},
+	}
+	blockData, _ := proto.Marshal(blockEnv)
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = bobConn.Write(writeCtx, websocket.MessageBinary, blockData)
+	writeCancel()
+	if err != nil {
+		t.Fatalf("write block: %v", err)
+	}
+
+	// Wait for block to be processed.
+	time.Sleep(200 * time.Millisecond)
+
+	// Alice sends a message to Bob -- should be silently dropped.
+	msg := &pinchv1.Envelope{
+		Version:     1,
+		FromAddress: aliceAddr,
+		ToAddress:   bobAddr,
+		Type:        pinchv1.MessageType_MESSAGE_TYPE_MESSAGE,
+	}
+	msgData, _ := proto.Marshal(msg)
+	writeCtx2, writeCancel2 := context.WithTimeout(ctx, 2*time.Second)
+	err = aliceConn.Write(writeCtx2, websocket.MessageBinary, msgData)
+	writeCancel2()
+	if err != nil {
+		t.Fatalf("write message: %v", err)
+	}
+
+	// Bob should NOT receive the message (blocked).
+	readCtx, readCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	_, _, err = bobConn.Read(readCtx)
+	readCancel()
+	if err == nil {
+		t.Fatal("expected bob to NOT receive message from blocked alice")
 	}
 }
