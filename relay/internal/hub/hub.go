@@ -80,19 +80,25 @@ func (h *Hub) Run(ctx context.Context) {
 	for {
 		select {
 		case client := <-h.register:
+			pendingCount := 0
+			if h.mq != nil {
+				pendingCount = h.mq.Count(client.address)
+				if pendingCount > 0 {
+					// Mark flushing before exposing the client in h.clients so
+					// concurrent RouteMessage calls preserve queued ordering.
+					client.SetFlushing(true)
+				}
+			}
+
 			h.mu.Lock()
 			h.clients[client.address] = client
 			h.mu.Unlock()
 
 			// Check for queued messages and start flush if needed.
-			if h.mq != nil {
-				count := h.mq.Count(client.address)
-				if count > 0 {
-					// Send QueueStatus to inform the client of pending messages.
-					h.sendQueueStatus(client, int32(count))
-					client.SetFlushing(true)
-					go h.flushQueuedMessages(client)
-				}
+			if pendingCount > 0 {
+				// Send QueueStatus to inform the client of pending messages.
+				h.sendQueueStatus(client, int32(pendingCount))
+				go h.flushQueuedMessages(client)
 			}
 
 			slog.Info("client registered",
@@ -102,12 +108,11 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case client := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client.address]; ok {
+			if existing, ok := h.clients[client.address]; ok && existing == client {
 				delete(h.clients, client.address)
-				close(client.send)
-				client.cancel()
 			}
 			h.mu.Unlock()
+			client.Shutdown()
 			if h.rateLimiter != nil {
 				h.rateLimiter.Remove(client.address)
 			}
@@ -119,8 +124,7 @@ func (h *Hub) Run(ctx context.Context) {
 		case <-ctx.Done():
 			h.mu.Lock()
 			for addr, client := range h.clients {
-				close(client.send)
-				client.cancel()
+				client.Shutdown()
 				delete(h.clients, addr)
 			}
 			h.mu.Unlock()
@@ -189,9 +193,20 @@ func (h *Hub) flushQueuedMessages(client *Client) {
 		}
 
 		for _, entry := range entries {
-			client.Send(entry.Envelope)
-			// Delete entry from bbolt immediately after queuing to send buffer.
-			// This prevents duplicate delivery on the next FlushBatch call.
+			// Delete only after successful enqueue to the outbound buffer.
+			for {
+				if client.ctx.Err() != nil || client.closed.Load() {
+					slog.Info("flush aborted while waiting for outbound buffer space",
+						"address", client.address,
+					)
+					return
+				}
+				if client.Send(entry.Envelope) {
+					break
+				}
+				time.Sleep(flushBatchDelay)
+			}
+
 			if err := h.mq.Remove(client.address, entry.Key); err != nil {
 				slog.Error("failed to remove flushed entry",
 					"address", client.address,

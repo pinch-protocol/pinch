@@ -12,7 +12,7 @@
  * Outputs JSON: { events: ActivityEvent[], count: number }
  */
 
-import { bootstrap, shutdown } from "./cli.js";
+import { bootstrapLocal, shutdownLocal } from "./cli.js";
 
 /** Parsed CLI arguments for pinch-activity. */
 export interface ActivityArgs {
@@ -64,7 +64,7 @@ export function parseArgs(args: string[]): ActivityArgs {
 /** Execute the pinch_activity tool. */
 export async function run(args: string[]): Promise<void> {
 	const parsed = parseArgs(args);
-	const { activityFeed } = await bootstrap();
+	const { activityFeed } = await bootstrapLocal();
 
 	// Exclude muted event types by default unless --include-muted is set.
 	const excludeEventTypes = parsed.includeMuted
@@ -81,7 +81,7 @@ export async function run(args: string[]): Promise<void> {
 	});
 
 	console.log(JSON.stringify({ events, count: events.length }));
-	await shutdown();
+	await shutdownLocal();
 }
 
 // Self-executable entry point.
