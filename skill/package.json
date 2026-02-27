@@ -10,7 +10,12 @@
     "pinch-history": "./dist/tools/pinch-history.js",
     "pinch-status": "./dist/tools/pinch-status.js",
     "pinch-autonomy": "./dist/tools/pinch-autonomy.js",
-    "pinch-permissions": "./dist/tools/pinch-permissions.js"
+    "pinch-permissions": "./dist/tools/pinch-permissions.js",
+    "pinch-activity": "./dist/tools/pinch-activity.js",
+    "pinch-intervene": "./dist/tools/pinch-intervene.js",
+    "pinch-mute": "./dist/tools/pinch-mute.js",
+    "pinch-audit-verify": "./dist/tools/pinch-audit-verify.js",
+    "pinch-audit-export": "./dist/tools/pinch-audit-export.js"
   },
   "scripts": {
     "build": "tsc",
