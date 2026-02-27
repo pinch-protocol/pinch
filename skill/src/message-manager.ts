@@ -315,6 +315,9 @@ export class MessageManager {
 		// 6-7. Update state or log warning
 		if (valid) {
 			this.messageStore.updateState(messageId, confirm.state);
+			if (confirm.wasStored) {
+				console.log(`Delivery confirmed for ${messageId} (stored: true)`);
+			}
 		} else {
 			console.warn(
 				`Invalid delivery confirmation signature for message ${messageId}`,
@@ -338,7 +341,33 @@ export class MessageManager {
 				case MessageType.DELIVERY_CONFIRM:
 					this.handleDeliveryConfirmation(envelope);
 					break;
+				case MessageType.QUEUE_STATUS:
+					this.handleQueueStatus(envelope);
+					break;
+				case MessageType.QUEUE_FULL:
+					this.handleQueueFull(envelope);
+					break;
 			}
 		});
+	}
+
+	/**
+	 * Handle a QueueStatus envelope from the relay indicating pending
+	 * queued messages before a flush begins.
+	 */
+	private handleQueueStatus(envelope: Envelope): void {
+		if (envelope.payload.case !== "queueStatus") return;
+		const pendingCount = envelope.payload.value.pendingCount;
+		console.log(`Relay reports ${pendingCount} queued messages pending flush`);
+	}
+
+	/**
+	 * Handle a QueueFull envelope from the relay indicating the recipient's
+	 * message queue has reached capacity.
+	 */
+	private handleQueueFull(envelope: Envelope): void {
+		if (envelope.payload.case !== "queueFull") return;
+		const { recipientAddress, reason } = envelope.payload.value;
+		console.warn(`Message to ${recipientAddress} not queued: ${reason}`);
 	}
 }

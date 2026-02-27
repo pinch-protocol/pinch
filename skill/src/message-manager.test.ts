@@ -5,6 +5,8 @@ import {
 	EncryptedPayloadSchema,
 	PlaintextPayloadSchema,
 	DeliveryConfirmSchema,
+	QueueStatusSchema,
+	QueueFullSchema,
 	MessageType,
 } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
@@ -409,6 +411,112 @@ describe("MessageManager", () => {
 			// Warning should have been logged
 			expect(warnSpy).toHaveBeenCalledWith(
 				expect.stringContaining("Invalid delivery confirmation"),
+			);
+			warnSpy.mockRestore();
+		});
+	});
+
+	describe("store-and-forward envelope handling", () => {
+		it("handles delivery confirmation with was_stored flag", async () => {
+			// Send a message from Alice so there's a stored outbound message
+			const messageId = await manager.sendMessage({
+				recipient: "pinch:bob@localhost",
+				body: "Hello Bob",
+			});
+
+			// Simulate Bob sending back a delivery confirmation with was_stored=true
+			const messageIdBytes = new TextEncoder().encode(messageId);
+			const timestamp = BigInt(Date.now());
+			const signature = await signDeliveryConfirmation(
+				messageIdBytes,
+				timestamp,
+				bobKeypair.privateKey,
+			);
+
+			const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+			const confirmEnvelope = create(EnvelopeSchema, {
+				version: 1,
+				fromAddress: "pinch:bob@localhost",
+				toAddress: "pinch:alice@localhost",
+				type: MessageType.DELIVERY_CONFIRM,
+				timestamp,
+				payload: {
+					case: "deliveryConfirm",
+					value: create(DeliveryConfirmSchema, {
+						messageId: messageIdBytes,
+						signature,
+						timestamp,
+						state: "delivered",
+						wasStored: true,
+					}),
+				},
+			});
+
+			await manager.handleDeliveryConfirmation(confirmEnvelope);
+
+			// State should be updated to delivered
+			const stored = messageStore.getMessage(messageId);
+			expect(stored!.state).toBe("delivered");
+
+			// Should have logged the stored delivery
+			expect(logSpy).toHaveBeenCalledWith(
+				expect.stringContaining(`Delivery confirmed for ${messageId} (stored: true)`),
+			);
+			logSpy.mockRestore();
+		});
+
+		it("handles QueueStatus envelope", () => {
+			manager.setupHandlers();
+
+			const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+			const queueStatusEnv = create(EnvelopeSchema, {
+				version: 1,
+				type: MessageType.QUEUE_STATUS,
+				payload: {
+					case: "queueStatus",
+					value: create(QueueStatusSchema, {
+						pendingCount: 5,
+					}),
+				},
+			});
+
+			// Dispatch to handlers
+			for (const handler of (mockRelay as any).envelopeHandlers) {
+				handler(queueStatusEnv);
+			}
+
+			expect(logSpy).toHaveBeenCalledWith(
+				"Relay reports 5 queued messages pending flush",
+			);
+			logSpy.mockRestore();
+		});
+
+		it("handles QueueFull envelope", () => {
+			manager.setupHandlers();
+
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			const queueFullEnv = create(EnvelopeSchema, {
+				version: 1,
+				type: MessageType.QUEUE_FULL,
+				payload: {
+					case: "queueFull",
+					value: create(QueueFullSchema, {
+						recipientAddress: "pinch:bob@localhost",
+						reason: "recipient message queue is full (limit: 1000)",
+					}),
+				},
+			});
+
+			// Dispatch to handlers
+			for (const handler of (mockRelay as any).envelopeHandlers) {
+				handler(queueFullEnv);
+			}
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				"Message to pinch:bob@localhost not queued: recipient message queue is full (limit: 1000)",
 			);
 			warnSpy.mockRestore();
 		});

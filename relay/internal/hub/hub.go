@@ -146,6 +146,11 @@ func (h *Hub) sendQueueStatus(client *Client, pendingCount int32) {
 // After flush completes, the client's flushing flag is cleared and real-time
 // traffic can resume. If the client disconnects during flush, remaining
 // messages stay in bbolt for the next reconnect.
+//
+// Each entry is deleted from bbolt immediately after being sent to the client's
+// send buffer. This prevents duplicate delivery when the flush loop re-reads
+// the queue. Messages that arrive DURING flush (enqueued by RouteMessage) will
+// be picked up in subsequent FlushBatch calls.
 func (h *Hub) flushQueuedMessages(client *Client) {
 	defer client.SetFlushing(false)
 
@@ -176,13 +181,15 @@ func (h *Hub) flushQueuedMessages(client *Client) {
 		}
 
 		for _, entry := range entries {
-			// Extract message_id from the envelope for delivery confirmation correlation.
-			var env pinchv1.Envelope
-			if err := proto.Unmarshal(entry.Envelope, &env); err == nil && len(env.MessageId) > 0 {
-				msgIdHex := hex.EncodeToString(env.MessageId)
-				client.TrackFlushKey(msgIdHex, entry.Key)
-			}
 			client.Send(entry.Envelope)
+			// Delete entry from bbolt immediately after queuing to send buffer.
+			// This prevents duplicate delivery on the next FlushBatch call.
+			if err := h.mq.Remove(client.address, entry.Key); err != nil {
+				slog.Error("failed to remove flushed entry",
+					"address", client.address,
+					"error", err,
+				)
+			}
 		}
 
 		// Small delay between batches to avoid overwhelming the client.
