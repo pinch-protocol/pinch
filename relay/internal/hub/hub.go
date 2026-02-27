@@ -54,6 +54,11 @@ type Hub struct {
 	// Can be nil to disable rate limiting (e.g., tests).
 	rateLimiter *RateLimiter
 
+	// done is closed when the Run loop exits.
+	done chan struct{}
+
+	doneOnce sync.Once
+
 	// mu protects external reads of the routing table.
 	mu sync.RWMutex
 }
@@ -70,6 +75,7 @@ func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue, rl *RateLimite
 		blockStore:  blockStore,
 		mq:          mq,
 		rateLimiter: rl,
+		done:        make(chan struct{}),
 	}
 }
 
@@ -77,6 +83,10 @@ func NewHub(blockStore *store.BlockStore, mq *store.MessageQueue, rl *RateLimite
 // events until the context is cancelled. Run should be called in its own
 // goroutine.
 func (h *Hub) Run(ctx context.Context) {
+	defer h.doneOnce.Do(func() {
+		close(h.done)
+	})
+
 	for {
 		select {
 		case client := <-h.register:
@@ -91,6 +101,9 @@ func (h *Hub) Run(ctx context.Context) {
 			}
 
 			h.mu.Lock()
+			if existing, ok := h.clients[client.address]; ok && existing != client {
+				existing.Shutdown()
+			}
 			h.clients[client.address] = client
 			h.mu.Unlock()
 
@@ -107,13 +120,17 @@ func (h *Hub) Run(ctx context.Context) {
 			)
 
 		case client := <-h.unregister:
+			removed := false
+
 			h.mu.Lock()
 			if existing, ok := h.clients[client.address]; ok && existing == client {
 				delete(h.clients, client.address)
+				removed = true
 			}
 			h.mu.Unlock()
+
 			client.Shutdown()
-			if h.rateLimiter != nil {
+			if removed && h.rateLimiter != nil {
 				h.rateLimiter.Remove(client.address)
 			}
 			slog.Info("client unregistered",
@@ -126,6 +143,9 @@ func (h *Hub) Run(ctx context.Context) {
 			for addr, client := range h.clients {
 				client.Shutdown()
 				delete(h.clients, addr)
+				if h.rateLimiter != nil {
+					h.rateLimiter.Remove(addr)
+				}
 			}
 			h.mu.Unlock()
 			slog.Info("hub stopped")
@@ -240,12 +260,20 @@ func (h *Hub) LookupClient(address string) (*Client, bool) {
 
 // Register queues a client for registration with the hub.
 func (h *Hub) Register(client *Client) {
-	h.register <- client
+	select {
+	case <-h.done:
+		client.Shutdown()
+	case h.register <- client:
+	}
 }
 
 // Unregister queues a client for removal from the hub.
 func (h *Hub) Unregister(client *Client) {
-	h.unregister <- client
+	select {
+	case <-h.done:
+		client.Shutdown()
+	case h.unregister <- client:
+	}
 }
 
 // RouteMessage deserializes an envelope, handles block/unblock commands,
@@ -302,6 +330,17 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 		return nil
 	}
 
+	// Bind sender identity to the authenticated connection before forwarding.
+	bindAuthenticatedSender(from.Address(), &env)
+	forwardEnvelope, err := proto.Marshal(&env)
+	if err != nil {
+		slog.Debug("route: failed to marshal normalized envelope",
+			"from", from.Address(),
+			"error", err,
+		)
+		return err
+	}
+
 	// For all other message types: check block list before delivery.
 	toAddress := env.ToAddress
 	if toAddress == "" {
@@ -321,7 +360,7 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 	if !ok {
 		// Recipient offline -- enqueue to durable store.
 		if h.mq != nil {
-			err := h.mq.Enqueue(toAddress, from.Address(), envelope)
+			err := h.mq.Enqueue(toAddress, from.Address(), forwardEnvelope)
 			if err == store.ErrQueueFull {
 				h.sendQueueFull(from, toAddress)
 				slog.Info("queue full for recipient",
@@ -342,7 +381,7 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 	// If recipient is online but flushing, enqueue to preserve ordering.
 	if recipient.IsFlushing() {
 		if h.mq != nil {
-			err := h.mq.Enqueue(toAddress, from.Address(), envelope)
+			err := h.mq.Enqueue(toAddress, from.Address(), forwardEnvelope)
 			if err == store.ErrQueueFull {
 				h.sendQueueFull(from, toAddress)
 			} else if err != nil {
@@ -356,8 +395,30 @@ func (h *Hub) RouteMessage(from *Client, envelope []byte) error {
 		return nil
 	}
 
-	recipient.Send(envelope)
+	recipient.Send(forwardEnvelope)
 	return nil
+}
+
+func bindAuthenticatedSender(fromAddress string, env *pinchv1.Envelope) {
+	env.FromAddress = fromAddress
+
+	switch payload := env.Payload.(type) {
+	case *pinchv1.Envelope_ConnectionRequest:
+		if payload.ConnectionRequest != nil {
+			payload.ConnectionRequest.FromAddress = fromAddress
+			payload.ConnectionRequest.ToAddress = env.ToAddress
+		}
+	case *pinchv1.Envelope_ConnectionResponse:
+		if payload.ConnectionResponse != nil {
+			payload.ConnectionResponse.FromAddress = fromAddress
+			payload.ConnectionResponse.ToAddress = env.ToAddress
+		}
+	case *pinchv1.Envelope_ConnectionRevoke:
+		if payload.ConnectionRevoke != nil {
+			payload.ConnectionRevoke.FromAddress = fromAddress
+			payload.ConnectionRevoke.ToAddress = env.ToAddress
+		}
+	}
 }
 
 // sendRateLimited sends a RateLimited error envelope to the sender.

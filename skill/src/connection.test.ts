@@ -14,25 +14,18 @@ import {
 import { ConnectionManager } from "./connection.js";
 import { ConnectionStore } from "./connection-store.js";
 import type { RelayClient } from "./relay-client.js";
-import type { Keypair } from "./identity.js";
 import { join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-
-/** Generate a deterministic test keypair (not cryptographically valid but structurally correct). */
-function makeTestKeypair(seed: number = 1): Keypair {
-	return {
-		publicKey: new Uint8Array(32).fill(seed),
-		privateKey: new Uint8Array(64).fill(seed),
-	};
-}
 
 /** Create a mock RelayClient with the methods ConnectionManager uses. */
 function createMockRelayClient(
 	assignedAddress = "pinch:alice@localhost",
+	publicKey: Uint8Array = new Uint8Array(32).fill(9),
 ): RelayClient & { sentEnvelopes: Uint8Array[]; envelopeCallback: ((env: Envelope) => void) | null } {
 	const mock = {
 		assignedAddress,
+		publicKey,
 		sentEnvelopes: [] as Uint8Array[],
 		envelopeCallback: null as ((env: Envelope) => void) | null,
 		sendEnvelope(data: Uint8Array): void {
@@ -91,7 +84,6 @@ describe("ConnectionManager", () => {
 		manager = new ConnectionManager(
 			mockRelay as unknown as RelayClient,
 			store,
-			makeTestKeypair(10),
 		);
 	});
 
@@ -118,6 +110,9 @@ describe("ConnectionManager", () => {
 				);
 				expect(env.payload.value.toAddress).toBe(
 					"pinch:bob@localhost",
+				);
+				expect(env.payload.value.senderPublicKey).toEqual(
+					mockRelay.publicKey,
 				);
 				expect(Number(env.payload.value.expiresAt)).toBeGreaterThan(0);
 			}
@@ -198,6 +193,9 @@ describe("ConnectionManager", () => {
 				);
 				expect(env.payload.value.toAddress).toBe(
 					"pinch:bob@localhost",
+				);
+				expect(env.payload.value.responderPublicKey).toEqual(
+					mockRelay.publicKey,
 				);
 			}
 
@@ -465,7 +463,6 @@ describe("ConnectionManager", () => {
 			const aliceManager = new ConnectionManager(
 				aliceRelay as unknown as RelayClient,
 				aliceStore,
-				makeTestKeypair(10),
 			);
 
 			// Set up Bob's side (approver).
@@ -478,7 +475,6 @@ describe("ConnectionManager", () => {
 			const bobManager = new ConnectionManager(
 				bobRelay as unknown as RelayClient,
 				bobStore,
-				makeTestKeypair(20),
 			);
 
 			// Step 1: Alice sends connection request.
@@ -528,7 +524,6 @@ describe("ConnectionManager", () => {
 			const aliceManager = new ConnectionManager(
 				aliceRelay as unknown as RelayClient,
 				aliceStore,
-				makeTestKeypair(10),
 			);
 
 			const bobTempDir = await mkdtemp(join(tmpdir(), "pinch-bob-"));
@@ -540,7 +535,6 @@ describe("ConnectionManager", () => {
 			const bobManager = new ConnectionManager(
 				bobRelay as unknown as RelayClient,
 				bobStore,
-				makeTestKeypair(20),
 			);
 
 			// Alice sends request.
@@ -633,6 +627,29 @@ describe("ConnectionManager", () => {
 			const conn = store.getConnection("pinch:charlie@localhost");
 			expect(conn).toBeDefined();
 			expect(conn!.state).toBe("pending_inbound");
+		});
+
+		it("catches async handler errors to avoid unhandled promise rejections", async () => {
+			manager.setupHandlers();
+
+			const responseEnv = createIncomingEnvelope(
+				MessageType.CONNECTION_RESPONSE,
+				"connectionResponse",
+				create(ConnectionResponseSchema, {
+					fromAddress: "pinch:unknown@localhost",
+					toAddress: "pinch:alice@localhost",
+					accepted: true,
+					responderPublicKey: new Uint8Array(32).fill(7),
+				}),
+			);
+
+			const unhandledRejectionSpy = vi.fn();
+			process.once("unhandledRejection", unhandledRejectionSpy);
+
+			mockRelay.envelopeCallback!(responseEnv);
+			await new Promise((r) => setTimeout(r, 50));
+
+			expect(unhandledRejectionSpy).not.toHaveBeenCalled();
 		});
 	});
 });

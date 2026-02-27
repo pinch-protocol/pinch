@@ -118,7 +118,6 @@ async function createAgent(name: string): Promise<Agent> {
 	const connectionManager = new ConnectionManager(
 		client,
 		connectionStore,
-		keypair,
 	);
 	const messageManager = new MessageManager(
 		client,

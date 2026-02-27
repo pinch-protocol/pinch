@@ -24,7 +24,6 @@ import {
 import type { Envelope } from "@pinch/proto/pinch/v1/envelope_pb.js";
 import type { RelayClient } from "./relay-client.js";
 import type { ConnectionStore } from "./connection-store.js";
-import type { Keypair } from "./identity.js";
 
 /** Maximum length for connection request messages. */
 const MAX_MESSAGE_LENGTH = 280;
@@ -41,7 +40,6 @@ export class ConnectionManager {
 	constructor(
 		private relayClient: RelayClient,
 		private connectionStore: ConnectionStore,
-		private keypair?: Keypair,
 	) {}
 
 	/**
@@ -80,7 +78,7 @@ export class ConnectionManager {
 					fromAddress: ownAddress,
 					toAddress,
 					message,
-					senderPublicKey: this.keypair?.publicKey ?? new Uint8Array(0),
+					senderPublicKey: this.relayClient.publicKey,
 					expiresAt,
 				}),
 			},
@@ -166,7 +164,7 @@ export class ConnectionManager {
 					fromAddress: ownAddress,
 					toAddress: peerAddress,
 					accepted: true,
-					responderPublicKey: this.keypair?.publicKey ?? new Uint8Array(0),
+					responderPublicKey: this.relayClient.publicKey,
 				}),
 			},
 		});
@@ -217,6 +215,12 @@ export class ConnectionManager {
 		}
 
 		const response = envelope.payload.value;
+		const existing = this.connectionStore.getConnection(
+			response.fromAddress,
+		);
+		if (!existing) {
+			return;
+		}
 
 		if (response.accepted) {
 			const responderPubKeyBase64 =
@@ -375,16 +379,22 @@ export class ConnectionManager {
 		this.relayClient.onEnvelope((envelope: Envelope) => {
 			switch (envelope.type) {
 				case MessageType.CONNECTION_REQUEST:
-					this.handleIncomingRequest(envelope);
+					this.runHandler(this.handleIncomingRequest(envelope));
 					break;
 				case MessageType.CONNECTION_RESPONSE:
-					this.handleIncomingResponse(envelope);
+					this.runHandler(this.handleIncomingResponse(envelope));
 					break;
 				case MessageType.CONNECTION_REVOKE:
-					this.handleIncomingRevoke(envelope);
+					this.runHandler(this.handleIncomingRevoke(envelope));
 					break;
 				// Other types: ignore (handled by messaging layer in Phase 3)
 			}
+		});
+	}
+
+	private runHandler(task: Promise<void>): void {
+		void task.catch(() => {
+			// Prevent unhandled promise rejections from malformed/unexpected traffic.
 		});
 	}
 }

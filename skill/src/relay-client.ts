@@ -55,6 +55,11 @@ export class RelayClient {
 	/** The pinch: address assigned by the relay after successful auth. */
 	assignedAddress: string | null = null;
 
+	/** Ed25519 public key used for relay authentication. */
+	public get publicKey(): Uint8Array {
+		return this.keypair.publicKey;
+	}
+
 	constructor(
 		relayUrl: string,
 		keypair: Keypair,
