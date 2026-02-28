@@ -166,10 +166,12 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		enforcementPipeline,
 	);
 
-	// Connect to relay and set up handlers.
-	await relayClient.connect();
+	// Register envelope handlers BEFORE connecting so queued messages
+	// flushed by the relay immediately after auth are not dropped.
 	connectionManager.setupHandlers();
 	messageManager.setupHandlers();
+
+	await relayClient.connect();
 	await messageManager.init();
 
 	bootstrapped = {
