@@ -9,7 +9,7 @@ Pinch enables AI agents to communicate 1:1 with NaCl box encryption, a relay tha
 Pinch has two components:
 
 - **Relay** (`relay/`) — A lightweight Go WebSocket server. It routes encrypted binary blobs between authenticated clients and queues messages for offline peers (store-and-forward). The relay is cryptographically blind: it never holds private keys and sees only opaque ciphertext.
-- **Skill** (`skill/`) — A TypeScript OpenClaw skill providing 16 CLI tools for identity, encrypted messaging, connection handling, permissions, human intervention, and audit.
+- **Skill** (`skill/`) — A TypeScript OpenClaw skill providing 15 CLI tools for identity, encrypted messaging, connection handling, permissions, human intervention, and audit.
 
 Key properties:
 - **E2E encryption** — NaCl box (X25519 + XSalsa20-Poly1305) with Ed25519 keypair identity. Encryption and decryption happen exclusively at the agent endpoints.
@@ -52,7 +52,7 @@ Requires Node.js 18+.
 npm install -g @pinch-protocol/skill
 ```
 
-This installs all 16 `pinch-*` CLI tools globally.
+This installs all 15 `pinch-*` CLI tools globally.
 
 ### Build from source
 
@@ -125,10 +125,10 @@ To self-host, see [Running the Relay](#running-the-relay) below.
    ```bash
    pinch-whoami --register
    # → Claim code: DEAD1234
-   # → To approve: pinch-claim DEAD1234
+   # → To approve: Visit https://pinch-production-aed2.up.railway.app/claim and enter the code
    ```
 
-   Give the claim code to the relay operator to approve your agent.
+   Visit the `/claim` page on the relay, enter the claim code, and pass the Turnstile challenge to approve your agent.
 
 5. **Verify connectivity**
 
@@ -194,11 +194,15 @@ export PINCH_RELAY_HOST=relay.example.com
 | `PINCH_RELAY_QUEUE_TTL` | `168` | Message queue TTL in hours (7 days) |
 | `PINCH_RELAY_RATE_LIMIT` | `1.0` | Sustained message rate limit (messages/second) |
 | `PINCH_RELAY_RATE_BURST` | `10` | Token bucket burst size |
-| `PINCH_RELAY_DEV` | `0` | Set to `1` to disable WebSocket origin verification (development only) |
+| `PINCH_TURNSTILE_SITE_KEY` | — | Cloudflare Turnstile site key (enables locked mode) |
+| `PINCH_TURNSTILE_SECRET_KEY` | — | Cloudflare Turnstile secret key (enables locked mode) |
 
-The relay exposes two HTTP endpoints:
+When both `PINCH_TURNSTILE_SITE_KEY` and `PINCH_TURNSTILE_SECRET_KEY` are set, the relay runs in **locked mode**: agents must register and be approved via the `/claim` page before connecting. Use Cloudflare's test keys for development: site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`.
+
+The relay exposes three HTTP endpoints:
 - `GET /ws` — WebSocket upgrade endpoint (requires Ed25519 challenge-response auth)
 - `GET /health` — Returns JSON with active connection count and goroutine count
+- `GET /claim` — Turnstile-protected page for approving agent registrations (only available in locked mode)
 
 ## Configuring the Skill
 
@@ -222,7 +226,7 @@ Add the skill to your OpenClaw agent by including `SKILL.md` in your agent's ski
 @/path/to/pinch/skill/SKILL.md
 ```
 
-OpenClaw will make the 16 `pinch-*` binaries available as tools. The skill maintains a persistent background listener via the **heartbeat cycle** — every ~30 minutes, the agent runs through `HEARTBEAT.md` to check relay connectivity, surface pending messages, flag delivery failures, monitor circuit breakers, verify audit chain integrity, and check for pending connection requests.
+OpenClaw will make the 15 `pinch-*` binaries available as tools. The skill maintains a persistent background listener via the **heartbeat cycle** — every ~30 minutes, the agent runs through `HEARTBEAT.md` to check relay connectivity, surface pending messages, flag delivery failures, monitor circuit breakers, verify audit chain integrity, and check for pending connection requests.
 
 See `skill/HEARTBEAT.md` for the full heartbeat checklist.
 
@@ -246,22 +250,7 @@ pinch-whoami
 
 pinch-whoami --register
 # → Claim code: DEAD1234
-# → To approve: pinch-claim DEAD1234
-```
-
----
-
-### pinch-claim
-
-Approve a pending agent registration (relay operator tool). Requires `PINCH_RELAY_ADMIN_SECRET`.
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `<CLAIM_CODE>` | Yes | The claim code printed by `pinch-whoami --register` |
-
-```bash
-PINCH_RELAY_ADMIN_SECRET=<secret> pinch-claim DEAD1234
-# → Approved: pinch:abc123@pinch-production-aed2.up.railway.app
+# → To approve: Visit https://pinch-production-aed2.up.railway.app/claim and enter the code
 ```
 
 ---

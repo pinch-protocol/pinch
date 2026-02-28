@@ -390,3 +390,109 @@ func TestRegisterHandlerRateLimitsRequests(t *testing.T) {
 		t.Fatalf("expected second request to be rate limited, got %d body=%q", rec2.Code, rec2.Body.String())
 	}
 }
+
+func TestClaimHandlerReturns404WhenTurnstileNotConfigured(t *testing.T) {
+	kr := newTestKeyRegistry(t)
+	handler := claimHandler(kr, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/agents/claim", strings.NewReader(`{"claim_code":"ABC","turnstile_token":"tok"}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func newMockTurnstileVerifier(t *testing.T, accept bool) *turnstileVerifier {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]bool{"success": accept})
+	}))
+	t.Cleanup(srv.Close)
+
+	v := newTurnstileVerifier("test-secret")
+	v.verifyURL = srv.URL
+	return v
+}
+
+func TestClaimHandlerRejects403OnInvalidTurnstileToken(t *testing.T) {
+	kr := newTestKeyRegistry(t)
+	v := newMockTurnstileVerifier(t, false)
+	handler := claimHandler(kr, v)
+
+	req := httptest.NewRequest(http.MethodPost, "/agents/claim", strings.NewReader(`{"claim_code":"ABC","turnstile_token":"bad"}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestClaimHandlerSuccessWithValidToken(t *testing.T) {
+	kr := newTestKeyRegistry(t)
+	v := newMockTurnstileVerifier(t, true)
+
+	// Register a pending key first.
+	pubKey := make([]byte, ed25519.PublicKeySize)
+	for i := range pubKey {
+		pubKey[i] = byte(i + 10)
+	}
+	pubKeyB64 := base64.StdEncoding.EncodeToString(pubKey)
+	claimCode, err := kr.RegisterPending(pubKeyB64, "pinch:test@relay.example.com")
+	if err != nil {
+		t.Fatalf("register pending: %v", err)
+	}
+
+	handler := claimHandler(kr, v)
+	payload := `{"claim_code":"` + claimCode + `","turnstile_token":"valid"}`
+	req := httptest.NewRequest(http.MethodPost, "/agents/claim", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["status"] != "approved" {
+		t.Fatalf("expected status=approved, got %q", resp["status"])
+	}
+	if resp["address"] != "pinch:test@relay.example.com" {
+		t.Fatalf("unexpected address: %q", resp["address"])
+	}
+}
+
+func TestClaimPageHandlerServesSiteKey(t *testing.T) {
+	handler := claimPageHandler("test-site-key-123")
+
+	req := httptest.NewRequest(http.MethodGet, "/claim", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "test-site-key-123") {
+		t.Fatal("expected site key in response body")
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("expected text/html content type, got %q", ct)
+	}
+}
+
+func TestClaimPageHandlerReturns404WhenNoSiteKey(t *testing.T) {
+	handler := claimPageHandler("")
+
+	req := httptest.NewRequest(http.MethodGet, "/claim", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}

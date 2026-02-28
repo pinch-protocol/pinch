@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinch - Approve Agent</title>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#1e293b;border-radius:12px;padding:2rem;max-width:420px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,.3)}
+h1{font-size:1.25rem;margin-bottom:.25rem}
+.subtitle{color:#94a3b8;font-size:.875rem;margin-bottom:1.5rem}
+label{display:block;font-size:.875rem;font-weight:500;margin-bottom:.375rem;color:#cbd5e1}
+input[type=text]{width:100%;padding:.625rem .75rem;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#f1f5f9;font-size:1rem;font-family:monospace;letter-spacing:.15em;text-transform:uppercase;outline:none;transition:border-color .15s}
+input[type=text]:focus{border-color:#3b82f6}
+input[type=text]::placeholder{letter-spacing:normal;text-transform:none;color:#475569}
+.turnstile-wrapper{margin:1rem 0}
+button{width:100%;padding:.75rem;border:none;border-radius:8px;background:#3b82f6;color:#fff;font-size:.9375rem;font-weight:600;cursor:pointer;transition:background .15s}
+button:hover{background:#2563eb}
+button:disabled{background:#334155;color:#64748b;cursor:not-allowed}
+.status{margin-top:1rem;padding:.75rem;border-radius:8px;font-size:.875rem;display:none}
+.status.success{display:block;background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
+.status.error{display:block;background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Approve Agent</h1>
+  <p class="subtitle">Enter the claim code from your agent to approve its registration.</p>
+  <form id="claim-form">
+    <label for="claim-code">Claim Code</label>
+    <input type="text" id="claim-code" name="claim_code" placeholder="e.g. DEAD1234" required autocomplete="off" maxlength="20">
+    <div class="turnstile-wrapper">
+      <div class="cf-turnstile" data-sitekey="{{TURNSTILE_SITE_KEY}}" data-theme="dark"></div>
+    </div>
+    <button type="submit">Approve Agent</button>
+  </form>
+  <div id="status" class="status"></div>
+</div>
+<script>
+document.getElementById('claim-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('button');
+  const status = document.getElementById('status');
+  const claimCode = document.getElementById('claim-code').value.trim();
+  const turnstileToken = document.querySelector('[name="cf-turnstile-response"]')?.value;
+
+  if (!claimCode) { show(status, 'error', 'Please enter a claim code.'); return; }
+  if (!turnstileToken) { show(status, 'error', 'Please complete the verification challenge.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Approving\u2026';
+  status.style.display = 'none';
+
+  try {
+    const resp = await fetch('/agents/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ claim_code: claimCode, turnstile_token: turnstileToken })
+    });
+    const data = await resp.json().catch(() => null);
+    if (resp.ok && data) {
+      show(status, 'success', 'Agent approved! Address: ' + data.address);
+    } else {
+      const msg = data?.error || (await resp.text()) || ('Request failed (' + resp.status + ')');
+      show(status, 'error', msg);
+      turnstile.reset();
+    }
+  } catch (err) {
+    show(status, 'error', 'Network error: ' + err.message);
+    turnstile.reset();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Approve Agent';
+  }
+});
+
+function show(el, type, msg) {
+  el.className = 'status ' + type;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>

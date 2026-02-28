@@ -78,7 +78,7 @@ export async function run(args: string[]): Promise<void> {
 
 	console.log();
 	console.log(`Claim code:  ${result.claim_code}`);
-	console.log(`To approve:  pinch-claim ${result.claim_code}`);
+	console.log(`To approve:  Visit ${baseUrl}/claim and enter the code`);
 }
 
 // Self-executable entry point.

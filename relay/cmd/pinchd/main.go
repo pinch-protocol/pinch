@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/subtle"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -30,6 +30,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+//go:embed static/claim.html
+var claimPageHTML string
+
 type wsConfig struct {
 	relayPublicHost  string
 	allowedOrigins   map[string]struct{}
@@ -37,8 +40,8 @@ type wsConfig struct {
 	authChallengeTTL time.Duration
 	authTimeout      time.Duration
 	nowFn            func() time.Time
-	keyRegistry      *store.KeyRegistry // nil = open mode
-	adminSecret      string
+	keyRegistry *store.KeyRegistry // nil = open mode
+	lockedMode  bool
 }
 
 const (
@@ -64,7 +67,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	adminSecret := os.Getenv("PINCH_RELAY_ADMIN_SECRET")
+	turnstileSiteKey := os.Getenv("PINCH_TURNSTILE_SITE_KEY")
+	turnstileSecretKey := os.Getenv("PINCH_TURNSTILE_SECRET_KEY")
 
 	pendingKeyTTLHours := defaultPendingKeyTTLHours
 	if v := os.Getenv("PINCH_RELAY_PENDING_KEY_TTL_HOURS"); v != "" {
@@ -177,10 +181,16 @@ func main() {
 			}
 		}
 	}()
-	if adminSecret != "" {
+	lockedMode := turnstileSecretKey != ""
+	if lockedMode {
 		slog.Info("relay running in locked mode")
 	} else {
 		slog.Info("relay running in open mode")
+	}
+
+	var verifier *turnstileVerifier
+	if turnstileSecretKey != "" {
+		verifier = newTurnstileVerifier(turnstileSecretKey)
 	}
 
 	rl := hub.NewRateLimiter(rate.Limit(rateLimit), rateBurst)
@@ -200,11 +210,12 @@ func main() {
 		authTimeout:      10 * time.Second,
 		nowFn:            time.Now,
 		keyRegistry:      keyReg,
-		adminSecret:      adminSecret,
+		lockedMode:       lockedMode,
 	}))
 	r.Get("/health", healthHandler(h))
 	r.Post("/agents/register", registerHandler(keyReg, publicHost, registerLimiter))
-	r.Post("/agents/claim", claimHandler(keyReg, adminSecret))
+	r.Post("/agents/claim", claimHandler(keyReg, verifier))
+	r.Get("/claim", claimPageHandler(turnstileSiteKey))
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -263,7 +274,7 @@ func wsHandler(serverCtx context.Context, h *hub.Hub, cfg wsConfig) http.Handler
 		}
 
 		// Locked mode: reject keys that have not been approved via registration.
-		if cfg.adminSecret != "" && cfg.keyRegistry != nil {
+		if cfg.lockedMode && cfg.keyRegistry != nil {
 			pubKeyB64 := base64.StdEncoding.EncodeToString(pubKey)
 			if !cfg.keyRegistry.IsApproved(pubKeyB64) {
 				slog.Warn("key not registered", "address", address)
@@ -353,11 +364,11 @@ func registerHandler(keyReg *store.KeyRegistry, relayPublicHost string, limiter 
 	}
 }
 
-// claimHandler is an admin endpoint that approves a pending registration.
-// Returns 404 if locked mode is not enabled (no admin secret configured).
-func claimHandler(keyReg *store.KeyRegistry, adminSecret string) http.HandlerFunc {
+// claimHandler approves a pending registration after verifying a Turnstile token.
+// Returns 404 if Turnstile is not configured (open mode).
+func claimHandler(keyReg *store.KeyRegistry, verifier *turnstileVerifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if adminSecret == "" {
+		if verifier == nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -369,16 +380,32 @@ func claimHandler(keyReg *store.KeyRegistry, adminSecret string) http.HandlerFun
 		}
 
 		var req struct {
-			ClaimCode   string `json:"claim_code"`
-			AdminSecret string `json:"admin_secret"`
+			ClaimCode      string `json:"claim_code"`
+			TurnstileToken string `json:"turnstile_token"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
 
-		if subtle.ConstantTimeCompare([]byte(req.AdminSecret), []byte(adminSecret)) != 1 {
-			http.Error(w, "forbidden", http.StatusForbidden)
+		if req.TurnstileToken == "" {
+			http.Error(w, "turnstile_token is required", http.StatusBadRequest)
+			return
+		}
+
+		remoteIP := r.RemoteAddr
+		if idx := strings.LastIndex(remoteIP, ":"); idx != -1 {
+			remoteIP = remoteIP[:idx]
+		}
+
+		ok, err := verifier.Verify(req.TurnstileToken, remoteIP)
+		if err != nil {
+			slog.Error("turnstile verification error", "error", err)
+			http.Error(w, "verification failed", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, "turnstile verification failed", http.StatusForbidden)
 			return
 		}
 
@@ -405,6 +432,21 @@ func claimHandler(keyReg *store.KeyRegistry, adminSecret string) http.HandlerFun
 			"address": address,
 			"status":  "approved",
 		})
+	}
+}
+
+// claimPageHandler serves the Turnstile-protected claim HTML page.
+// Returns 404 if Turnstile is not configured.
+func claimPageHandler(siteKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if siteKey == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		page := strings.Replace(claimPageHTML, "{{TURNSTILE_SITE_KEY}}", siteKey, 1)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, page)
 	}
 }
 

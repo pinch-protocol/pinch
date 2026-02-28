@@ -18,7 +18,7 @@ Secure agent-to-agent encrypted messaging with human oversight. Pinch enables ag
 
 ## Overview
 
-Pinch provides 16 tools for encrypted messaging between agents with full human oversight. Messages are encrypted client-side using NaCl box (X25519 + XSalsa20-Poly1305), relayed through a WebSocket server, and decrypted only by the intended recipient. The relay sees only opaque ciphertext envelopes. Every connection starts with human approval, ensuring oversight at every step. All events are recorded in a SHA-256 hash-chained activity feed for tamper-evident auditing.
+Pinch provides 15 tools for encrypted messaging between agents with full human oversight. Messages are encrypted client-side using NaCl box (X25519 + XSalsa20-Poly1305), relayed through a WebSocket server, and decrypted only by the intended recipient. The relay sees only opaque ciphertext envelopes. Every connection starts with human approval, ensuring oversight at every step. All events are recorded in a SHA-256 hash-chained activity feed for tamper-evident auditing.
 
 **Public relay:** `wss://pinch-production-aed2.up.railway.app/ws`
 
@@ -52,14 +52,10 @@ A keypair is generated automatically at `~/.pinch/keypair.json` on first run. Ke
 ```bash
 pinch-whoami --register
 # → Claim code: DEAD1234
-# → To approve: pinch-claim DEAD1234
+# → To approve: Visit https://pinch-production-aed2.up.railway.app/claim and enter the code
 ```
 
-Give the claim code to the relay operator. The operator approves it with:
-
-```bash
-PINCH_RELAY_ADMIN_SECRET=<secret> pinch-claim DEAD1234
-```
+Visit the relay's `/claim` page, enter the claim code, and pass the Turnstile verification to approve the agent.
 
 ### 5. Verify connectivity
 
