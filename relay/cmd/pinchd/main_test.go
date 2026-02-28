@@ -326,6 +326,40 @@ func TestWSHandlerAllowsConfiguredOrigin(t *testing.T) {
 	waitForClientCount(t, ts.hub, 1, 2*time.Second)
 }
 
+func TestWSHandlerAllowsAnyOriginWithWildcard(t *testing.T) {
+	cfg := wsConfig{
+		relayPublicHost:  "relay.example.com",
+		allowAllOrigins:  true,
+		authChallengeTTL: 10 * time.Second,
+		authTimeout:      2 * time.Second,
+		nowFn:            time.Now,
+	}
+	ts := newTestServer(t, cfg)
+
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i + 5)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+
+	headers := http.Header{}
+	headers.Set("Origin", "null")
+	conn, _, err := websocket.Dial(context.Background(), wsURL(ts.server.URL), &websocket.DialOptions{
+		HTTPHeader: headers,
+	})
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "done") })
+
+	authenticateConnection(t, conn, priv)
+	result := readAuthResult(t, conn)
+	if !result.GetSuccess() {
+		t.Fatalf("expected wildcard auth success result, got failure: %s", result.GetErrorMessage())
+	}
+	waitForClientCount(t, ts.hub, 1, 2*time.Second)
+}
+
 func TestHealthHandlerAllowsLoopback(t *testing.T) {
 	h := hub.NewHub(nil, nil, nil)
 	handler := healthHandler(h)
@@ -494,5 +528,43 @@ func TestClaimPageHandlerReturns404WhenNoSiteKey(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestParseAllowedOriginsSupportsWildcard(t *testing.T) {
+	allowed, patterns, allowAll, err := parseAllowedOrigins("*")
+	if err != nil {
+		t.Fatalf("parseAllowedOrigins returned unexpected error: %v", err)
+	}
+	if !allowAll {
+		t.Fatal("expected allowAll to be true for wildcard config")
+	}
+	if len(allowed) != 0 {
+		t.Fatalf("expected no explicit allowed origins, got %v", allowed)
+	}
+	if len(patterns) != 0 {
+		t.Fatalf("expected no explicit origin patterns, got %v", patterns)
+	}
+}
+
+func TestParseAllowedOriginsSupportsWildcardWithSpecificOrigins(t *testing.T) {
+	allowed, patterns, allowAll, err := parseAllowedOrigins("https://app.example.com,*,HTTP://LOCALHOST:3000")
+	if err != nil {
+		t.Fatalf("parseAllowedOrigins returned unexpected error: %v", err)
+	}
+	if !allowAll {
+		t.Fatal("expected allowAll to be true when wildcard is present")
+	}
+	if _, ok := allowed["https://app.example.com"]; !ok {
+		t.Fatalf("expected https://app.example.com to be in allowed set: %v", allowed)
+	}
+	if _, ok := allowed["http://localhost:3000"]; !ok {
+		t.Fatalf("expected http://localhost:3000 to be in allowed set: %v", allowed)
+	}
+	if len(patterns) != 2 {
+		t.Fatalf("expected 2 explicit origin patterns, got %d (%v)", len(patterns), patterns)
+	}
+	if patterns[0] != "https://app.example.com" || patterns[1] != "http://localhost:3000" {
+		t.Fatalf("unexpected origin pattern order/content: %v", patterns)
 	}
 }
