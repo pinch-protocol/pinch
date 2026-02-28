@@ -151,6 +151,8 @@ this._flushPromise = new Promise<void>((resolve, reject) => {
 		const wrappedContent = JSON.stringify({
 			text: body,
 			attribution,
+			threadId,
+			replyTo,
 		});
 		const plaintext = create(PlaintextPayloadSchema, {
 			version: 1,
@@ -262,11 +264,15 @@ this._flushPromise = new Promise<void>((resolve, reject) => {
 		const rawBody = new TextDecoder().decode(plaintextPayload.content);
 		let body = rawBody;
 		let inboundAttribution: "agent" | "human" = "agent";
+		let threadId: string | undefined;
+		let replyTo: string | undefined;
 		if (plaintextPayload.contentType === "application/x-pinch+json") {
 			try {
 				const parsed = JSON.parse(rawBody);
 				body = parsed.text ?? rawBody;
-				inboundAttribution = parsed.attribution ?? "agent";
+				if (parsed.attribution === "agent" || parsed.attribution === "human") inboundAttribution = parsed.attribution;
+				if (typeof parsed.threadId === "string") threadId = parsed.threadId;
+				if (typeof parsed.replyTo === "string") replyTo = parsed.replyTo;
 			} catch {
 				// Not valid JSON -- use raw body
 				body = rawBody;
@@ -283,6 +289,8 @@ this._flushPromise = new Promise<void>((resolve, reject) => {
 			connectionAddress: senderAddress,
 			direction: "inbound",
 			body,
+			threadId,
+			replyTo,
 			sequence: Number(plaintextPayload.sequence),
 			state: "delivered",
 			priority: "normal",
