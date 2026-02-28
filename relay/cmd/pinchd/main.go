@@ -37,6 +37,7 @@ type wsConfig struct {
 	relayPublicHost  string
 	allowedOrigins   map[string]struct{}
 	originPatterns   []string
+	allowAllOrigins  bool
 	authChallengeTTL time.Duration
 	authTimeout      time.Duration
 	nowFn            func() time.Time
@@ -61,7 +62,7 @@ func main() {
 		slog.Error("missing required PINCH_RELAY_PUBLIC_HOST")
 		os.Exit(1)
 	}
-	allowedOrigins, originPatterns, err := parseAllowedOrigins(os.Getenv("PINCH_RELAY_ALLOWED_ORIGINS"))
+	allowedOrigins, originPatterns, allowAllOrigins, err := parseAllowedOrigins(os.Getenv("PINCH_RELAY_ALLOWED_ORIGINS"))
 	if err != nil {
 		slog.Error("invalid PINCH_RELAY_ALLOWED_ORIGINS", "error", err)
 		os.Exit(1)
@@ -206,6 +207,7 @@ func main() {
 		relayPublicHost:  publicHost,
 		allowedOrigins:   allowedOrigins,
 		originPatterns:   originPatterns,
+		allowAllOrigins:  allowAllOrigins,
 		authChallengeTTL: 10 * time.Second,
 		authTimeout:      10 * time.Second,
 		nowFn:            time.Now,
@@ -245,14 +247,20 @@ func main() {
 // authentication before registering the client in the hub.
 func wsHandler(serverCtx context.Context, h *hub.Hub, cfg wsConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !isOriginAllowed(r.Header.Get("Origin"), cfg.allowedOrigins) {
+		if !isOriginAllowed(r.Header.Get("Origin"), cfg.allowedOrigins, cfg.allowAllOrigins) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
 			return
 		}
 
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		acceptOptions := &websocket.AcceptOptions{
 			OriginPatterns: cfg.originPatterns,
-		})
+		}
+		if cfg.allowAllOrigins {
+			acceptOptions.InsecureSkipVerify = true
+			acceptOptions.OriginPatterns = nil
+		}
+
+		conn, err := websocket.Accept(w, r, acceptOptions)
 		if err != nil {
 			slog.Error("websocket accept error", "error", err)
 			return
@@ -484,18 +492,23 @@ func healthHandler(h *hub.Hub) http.HandlerFunc {
 	}
 }
 
-func parseAllowedOrigins(raw string) (map[string]struct{}, []string, error) {
+func parseAllowedOrigins(raw string) (map[string]struct{}, []string, bool, error) {
 	allowed := make(map[string]struct{})
 	if strings.TrimSpace(raw) == "" {
-		return allowed, nil, nil
+		return allowed, nil, false, nil
 	}
 
 	parts := strings.Split(raw, ",")
 	patterns := make([]string, 0, len(parts))
+	allowAll := false
 	for _, part := range parts {
+		if strings.TrimSpace(part) == "*" {
+			allowAll = true
+			continue
+		}
 		origin, err := canonicalOrigin(part)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 		if origin == "" {
 			continue
@@ -503,10 +516,16 @@ func parseAllowedOrigins(raw string) (map[string]struct{}, []string, error) {
 		allowed[origin] = struct{}{}
 		patterns = append(patterns, origin)
 	}
-	return allowed, patterns, nil
+	if len(patterns) == 0 {
+		patterns = nil
+	}
+	return allowed, patterns, allowAll, nil
 }
 
-func isOriginAllowed(originHeader string, allowed map[string]struct{}) bool {
+func isOriginAllowed(originHeader string, allowed map[string]struct{}, allowAll bool) bool {
+	if allowAll {
+		return true
+	}
 	if originHeader == "" {
 		return true
 	}
