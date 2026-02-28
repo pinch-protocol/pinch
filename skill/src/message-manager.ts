@@ -270,9 +270,9 @@ export class MessageManager {
 			try {
 				const parsed = JSON.parse(rawBody);
 				body = parsed.text ?? rawBody;
-				inboundAttribution = parsed.attribution ?? "agent";
-				threadId = parsed.threadId;
-				replyTo = parsed.replyTo;
+				if (parsed.attribution === "agent" || parsed.attribution === "human") inboundAttribution = parsed.attribution;
+				if (typeof parsed.threadId === "string") threadId = parsed.threadId;
+				if (typeof parsed.replyTo === "string") replyTo = parsed.replyTo;
 			} catch {
 				// Not valid JSON -- use raw body
 				body = rawBody;
