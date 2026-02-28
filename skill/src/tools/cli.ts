@@ -73,6 +73,17 @@ export function isToolEntrypoint(
 	);
 }
 
+/** Format safe stderr text for inbound connection notifications. */
+export function formatIncomingConnectionRequestLog(
+	fromAddress: string,
+	message: string,
+): string {
+	return `[pinch] Incoming connection request ${JSON.stringify({
+		fromAddress,
+		message,
+	})}\n`;
+}
+
 /**
  * Run a tool when the current process is executing its script directly.
  * This keeps entrypoint/error boilerplate shared across CLI tools.
@@ -169,7 +180,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
 		}
 
 		process.stderr.write(
-			`[pinch] Incoming connection request from ${fromAddress}: "${message}"\n`,
+			formatIncomingConnectionRequestLog(fromAddress, message),
 		);
 	};
 	const connectionManager = new ConnectionManager(

@@ -48,6 +48,30 @@ export class ConnectionManager {
 		) => void,
 	) {}
 
+	private notifyConnectionRequest(
+		fromAddress: string,
+		message: string,
+	): void {
+		try {
+			const result = this.onConnectionRequest?.(fromAddress, message);
+			void Promise.resolve(result).catch((error: unknown) => {
+				this.logConnectionRequestCallbackError(error);
+			});
+		} catch (error) {
+			this.logConnectionRequestCallbackError(error);
+		}
+	}
+
+	private logConnectionRequestCallbackError(error: unknown): void {
+		const text =
+			error instanceof Error
+				? (error.stack ?? error.message)
+				: String(error);
+		process.stderr.write(
+			`[pinch] Connection request callback failed: ${text}\n`,
+		);
+	}
+
 	/**
 	 * Send a connection request to another agent.
 	 * Creates a pending_outbound connection in the local store.
@@ -138,7 +162,7 @@ export class ConnectionManager {
 
 		// Notify host agent after persistence so callback handlers can safely
 		// approve/reject immediately against stored state.
-		this.onConnectionRequest?.(request.fromAddress, request.message);
+		this.notifyConnectionRequest(request.fromAddress, request.message);
 	}
 
 	/**

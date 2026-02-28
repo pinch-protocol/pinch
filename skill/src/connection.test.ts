@@ -725,6 +725,62 @@ describe("ConnectionManager", () => {
 				"Hi from Charlie",
 			);
 		});
+
+		it("does not reject when callback throws synchronously", async () => {
+			const callbackManager = new ConnectionManager(
+				mockRelay as unknown as RelayClient,
+				store,
+				makeTestKeypair(10),
+				() => {
+					throw new Error("sync callback error");
+				},
+			);
+			const envelope = createIncomingEnvelope(
+				MessageType.CONNECTION_REQUEST,
+				"connectionRequest",
+				create(ConnectionRequestSchema, {
+					fromAddress: "pinch:bob@localhost",
+					toAddress: "pinch:alice@localhost",
+					message: "Hello from Bob",
+					senderPublicKey: new Uint8Array(32).fill(1),
+					expiresAt: BigInt(Math.floor(Date.now() / 1000) + 604800),
+				}),
+			);
+
+			await expect(
+				callbackManager.handleIncomingRequest(envelope),
+			).resolves.toBeUndefined();
+
+			const conn = store.getConnection("pinch:bob@localhost");
+			expect(conn).toBeDefined();
+			expect(conn!.state).toBe("pending_inbound");
+		});
+
+		it("does not produce unhandled rejection when callback returns rejected promise", async () => {
+			const callbackManager = new ConnectionManager(
+				mockRelay as unknown as RelayClient,
+				store,
+				makeTestKeypair(10),
+				async () => {
+					throw new Error("async callback error");
+				},
+			);
+			const envelope = createIncomingEnvelope(
+				MessageType.CONNECTION_REQUEST,
+				"connectionRequest",
+				create(ConnectionRequestSchema, {
+					fromAddress: "pinch:bob@localhost",
+					toAddress: "pinch:alice@localhost",
+					message: "Hello from Bob",
+					senderPublicKey: new Uint8Array(32).fill(1),
+					expiresAt: BigInt(Math.floor(Date.now() / 1000) + 604800),
+				}),
+			);
+
+			await expect(
+				callbackManager.handleIncomingRequest(envelope),
+			).resolves.toBeUndefined();
+		});
 	});
 
 	describe("setupHandlers", () => {
