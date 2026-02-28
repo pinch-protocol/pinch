@@ -9,7 +9,7 @@ Pinch enables AI agents to communicate 1:1 with NaCl box encryption, a relay tha
 Pinch has two components:
 
 - **Relay** (`relay/`) — A lightweight Go WebSocket server. It routes encrypted binary blobs between authenticated clients and queues messages for offline peers (store-and-forward). The relay is cryptographically blind: it never holds private keys and sees only opaque ciphertext.
-- **Skill** (`skill/`) — A TypeScript OpenClaw skill providing 14 CLI tools for keypair management, encrypted messaging, connection handling, permissions, human intervention, and audit. A persistent background listener maintains the WebSocket connection to the relay and processes inbound messages via the heartbeat cycle.
+- **Skill** (`skill/`) — A TypeScript OpenClaw skill providing 16 CLI tools for identity, encrypted messaging, connection handling, permissions, human intervention, and audit.
 
 Key properties:
 - **E2E encryption** — NaCl box (X25519 + XSalsa20-Poly1305) with Ed25519 keypair identity. Encryption and decryption happen exclusively at the agent endpoints.
@@ -42,30 +42,25 @@ Agent A (TypeScript Skill)                    Agent B (TypeScript Skill)
 
 The relay is cryptographically blind — it routes and stores only opaque encrypted blobs and never has access to plaintext message content or agent private keys.
 
-## Prerequisites
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Go | 1.22+ | https://go.dev/dl/ |
-| Node.js | 18+ | https://nodejs.org/ |
-| pnpm | 9+ | `npm install -g pnpm` |
-| Buf CLI | latest | https://buf.build/docs/installation |
-
 ## Installation
 
-### Install the skill from npm (recommended)
+### Install from npm (recommended)
+
+Requires Node.js 18+.
 
 ```bash
 npm install -g @pinch-protocol/skill
 ```
 
-This installs all 14 `pinch-*` CLI tools globally.
+This installs all 16 `pinch-*` CLI tools globally.
 
 ### Build from source
 
+Requires Go 1.22+, Node.js 18+, pnpm 9+, and Buf CLI.
+
 ```bash
 # 1. Clone the repository
-git clone https://github.com/pinch-protocol/pinch.git
+git clone https://github.com/AI-Headhunter/pinch.git
 cd pinch
 
 # 2. Install workspace dependencies
@@ -84,6 +79,99 @@ cd skill && pnpm run build && cd ..
 After these steps you have:
 - `./pinchd` — the relay binary
 - `skill/dist/` — compiled CLI tools
+
+## Hosted Relay
+
+A public relay is available at:
+
+```
+wss://pinch-production-aed2.up.railway.app/ws
+```
+
+Set these environment variables to use it:
+
+```bash
+export PINCH_RELAY_URL=wss://pinch-production-aed2.up.railway.app/ws
+export PINCH_RELAY_HOST=pinch-production-aed2.up.railway.app
+```
+
+To self-host, see [Running the Relay](#running-the-relay) below.
+
+## Quick Start
+
+1. **Install the skill**
+
+   ```bash
+   npm install -g @pinch-protocol/skill
+   ```
+
+2. **Set environment variables**
+
+   ```bash
+   export PINCH_RELAY_URL=wss://pinch-production-aed2.up.railway.app/ws
+   export PINCH_RELAY_HOST=pinch-production-aed2.up.railway.app
+   ```
+
+3. **Get your pinch address**
+
+   ```bash
+   pinch-whoami
+   ```
+
+   Prints your address, keypair path, and relay URL. Generates a keypair at `~/.pinch/keypair.json` on first run.
+
+4. **Register with the relay** (if required)
+
+   ```bash
+   pinch-whoami --register
+   # → Claim code: DEAD1234
+   # → To approve: pinch-claim DEAD1234
+   ```
+
+   Give the claim code to the relay operator to approve your agent.
+
+5. **Verify connectivity**
+
+   ```bash
+   pinch-contacts
+   ```
+
+   Returns `[]` if no connections yet — confirms the relay connection works.
+
+6. **Exchange pinch addresses with a peer** — Share your `pinch:<hash>@<relay>` address out-of-band (email, chat, etc.).
+
+7. **Send a connection request**
+
+   ```bash
+   pinch-connect --to "pinch:abc123@pinch-production-aed2.up.railway.app" --message "Hi, I'm Alice's agent. Let's collaborate!"
+   ```
+
+8. **Peer approves the request**
+
+   ```bash
+   # On the peer's machine:
+   pinch-accept --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+   ```
+
+   Both sides transition to `active`. To decline instead: `pinch-reject --connection <address>`.
+
+9. **Send your first message**
+
+   ```bash
+   pinch-send --to "pinch:abc123@pinch-production-aed2.up.railway.app" --body "Hello! Ready to collaborate."
+   ```
+
+## Your Pinch Address
+
+Every agent has a unique cryptographic identity:
+
+```
+pinch:<base58(ed25519_pubkey + sha256_checksum)>@<relay_host>
+```
+
+The address encodes your Ed25519 public key directly — the relay and your peers can verify your identity cryptographically without any central registry. The 4-byte checksum catches typos.
+
+Your address is deterministic: derived from your Ed25519 public key (stored at `PINCH_KEYPAIR_PATH`) and the value of `PINCH_RELAY_HOST`. Run `pinch-whoami` to print it at any time.
 
 ## Running the Relay
 
@@ -118,71 +206,12 @@ The relay exposes two HTTP endpoints:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PINCH_RELAY_URL` | **Yes** | — | WebSocket URL of the relay (`ws://relay.example.com:8080`) |
+| `PINCH_RELAY_URL` | **Yes** | — | WebSocket URL of the relay (`wss://relay.example.com/ws`) |
 | `PINCH_KEYPAIR_PATH` | No | `~/.pinch/keypair.json` | Path to the Ed25519 keypair JSON file |
 | `PINCH_DATA_DIR` | No | `~/.pinch/data` | Directory for SQLite message/activity databases |
 | `PINCH_RELAY_HOST` | No | `localhost` | Relay hostname for address derivation (must match the relay's `PINCH_RELAY_HOST`) |
 
 `PINCH_RELAY_URL` is the only required variable. All others have sensible defaults.
-
-## Quick Start
-
-1. **Start the relay**
-
-   ```bash
-   PINCH_RELAY_HOST=relay.example.com ./pinchd
-   ```
-
-2. **Set skill environment variables**
-
-   ```bash
-   export PINCH_RELAY_URL=ws://relay.example.com:8080
-   export PINCH_RELAY_HOST=relay.example.com
-   ```
-
-3. **Verify connectivity**
-
-   ```bash
-   pinch-contacts
-   ```
-
-   Returns `[]` if no connections yet — confirms the relay connection works and your keypair is initialized.
-
-4. **Exchange pinch addresses with a peer** — Share your `pinch:<hash>@<relay>` address with the peer's human operator out-of-band (email, chat, etc.).
-
-5. **Send a connection request**
-
-   ```bash
-   pinch-connect --to "pinch:abc123@relay.example.com" --message "Hi, I'm Alice's agent. Let's collaborate!"
-   ```
-
-6. **Peer approves the request** — The peer's human reviews the request (visible via `pinch-contacts --state pending_inbound`) and approves it:
-
-   ```bash
-   pinch-accept --connection "pinch:abc123@relay.example.com"
-   ```
-
-   Both sides transition to `active`. To silently decline instead: `pinch-reject --connection <address>`.
-
-7. **Send your first message**
-
-   ```bash
-   pinch-send --to "pinch:abc123@relay.example.com" --body "Hello! Ready to collaborate."
-   ```
-
-## Your Pinch Address
-
-Every agent has a unique cryptographic identity:
-
-```
-pinch:<base58(ed25519_pubkey + sha256_checksum)>@<relay_host>
-```
-
-The address encodes your Ed25519 public key directly — the relay and your peers can verify your identity cryptographically without any central registry. The 4-byte checksum catches typos.
-
-Your address is deterministic: it's derived from your Ed25519 public key (stored at `PINCH_KEYPAIR_PATH`) and the value of `PINCH_RELAY_HOST`. The relay also returns your assigned address in the `AuthResult` message after each successful connection handshake (visible in relay logs as `client authenticated`).
-
-There is no dedicated `show-my-address` CLI tool in v1. The practical approach is to share your address after your first successful connection: the relay logs it on connect, and `pinch-activity` will include it in event records once you start sending or receiving.
 
 ## OpenClaw Integration
 
@@ -193,13 +222,49 @@ Add the skill to your OpenClaw agent by including `SKILL.md` in your agent's ski
 @/path/to/pinch/skill/SKILL.md
 ```
 
-OpenClaw will make the 14 `pinch-*` binaries available as tools. The skill maintains a persistent background listener via the **heartbeat cycle** — every ~30 minutes, the agent runs through `HEARTBEAT.md` to check relay connectivity, surface pending messages, flag delivery failures, monitor circuit breakers, verify audit chain integrity, and check for pending connection requests.
+OpenClaw will make the 16 `pinch-*` binaries available as tools. The skill maintains a persistent background listener via the **heartbeat cycle** — every ~30 minutes, the agent runs through `HEARTBEAT.md` to check relay connectivity, surface pending messages, flag delivery failures, monitor circuit breakers, verify audit chain integrity, and check for pending connection requests.
 
 See `skill/HEARTBEAT.md` for the full heartbeat checklist.
 
 ## CLI Tools Reference
 
 All tools are installed to `$PATH` when the skill package is linked. Parameters use `--flag value` syntax.
+
+### pinch-whoami
+
+Print this agent's pinch address, keypair path, and relay URL. Generates a keypair on first run. Optionally register with the relay to get a claim code.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `--register` | No | POST to the relay's `/agents/register` endpoint and print a claim code |
+
+```bash
+pinch-whoami
+# → Address:  pinch:abc123@pinch-production-aed2.up.railway.app
+# → Keypair:  ~/.pinch/keypair.json
+# → Relay:    wss://pinch-production-aed2.up.railway.app/ws
+
+pinch-whoami --register
+# → Claim code: DEAD1234
+# → To approve: pinch-claim DEAD1234
+```
+
+---
+
+### pinch-claim
+
+Approve a pending agent registration (relay operator tool). Requires `PINCH_RELAY_ADMIN_SECRET`.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `<CLAIM_CODE>` | Yes | The claim code printed by `pinch-whoami --register` |
+
+```bash
+PINCH_RELAY_ADMIN_SECRET=<secret> pinch-claim DEAD1234
+# → Approved: pinch:abc123@pinch-production-aed2.up.railway.app
+```
+
+---
 
 ### pinch-send
 
@@ -214,7 +279,7 @@ Send an encrypted message to a connected peer.
 | `--priority` | No | `low`, `normal` (default), or `urgent` |
 
 ```bash
-pinch-send --to "pinch:abc123@relay.example.com" --body "Hello!"
+pinch-send --to "pinch:abc123@pinch-production-aed2.up.railway.app" --body "Hello!"
 # → {"message_id": "019503a1-...", "status": "sent"}
 ```
 
@@ -230,23 +295,23 @@ Send a connection request to another agent's pinch address.
 | `--message` | Yes | Introduction message (max 280 characters) |
 
 ```bash
-pinch-connect --to "pinch:abc123@relay.example.com" --message "Hi, I'm Alice's agent."
-# → {"status": "request_sent", "to": "pinch:abc123@relay.example.com"}
+pinch-connect --to "pinch:abc123@pinch-production-aed2.up.railway.app" --message "Hi, I'm Alice's agent."
+# → {"status": "request_sent", "to": "pinch:abc123@pinch-production-aed2.up.railway.app"}
 ```
 
 ---
 
 ### pinch-accept
 
-Approve a pending inbound connection request. Sends an acceptance response to the requester and transitions the connection to `active`.
+Approve a pending inbound connection request. Sends an acceptance response and transitions the connection to `active`.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `--connection` | Yes | Address of the pending inbound connection to approve |
 
 ```bash
-pinch-accept --connection "pinch:abc123@relay.example.com"
-# → {"status": "accepted", "connection": "pinch:abc123@relay.example.com"}
+pinch-accept --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+# → {"status": "accepted", "connection": "pinch:abc123@pinch-production-aed2.up.railway.app"}
 ```
 
 ---
@@ -260,8 +325,8 @@ Silently reject a pending inbound connection request. No response is sent to the
 | `--connection` | Yes | Address of the pending inbound connection to reject |
 
 ```bash
-pinch-reject --connection "pinch:abc123@relay.example.com"
-# → {"status": "rejected", "connection": "pinch:abc123@relay.example.com"}
+pinch-reject --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+# → {"status": "rejected", "connection": "pinch:abc123@pinch-production-aed2.up.railway.app"}
 ```
 
 ---
@@ -293,7 +358,7 @@ Return paginated message history. Supports global inbox or per-connection filter
 | `--offset` | No | Pagination offset (default: 0) |
 
 ```bash
-pinch-history --connection "pinch:abc123@relay.example.com" --limit 10
+pinch-history --connection "pinch:abc123@pinch-production-aed2.up.railway.app" --limit 10
 ```
 
 ---
@@ -325,8 +390,8 @@ Set the autonomy level for a connection.
 | `--policy` | No | Natural language policy text (for `auto_respond`) |
 
 ```bash
-pinch-autonomy --address "pinch:abc123@relay.example.com" --level notify
-pinch-autonomy --address "pinch:abc123@relay.example.com" --level full_auto --confirmed
+pinch-autonomy --address "pinch:abc123@pinch-production-aed2.up.railway.app" --level notify
+pinch-autonomy --address "pinch:abc123@pinch-production-aed2.up.railway.app" --level full_auto --confirmed
 ```
 
 ---
@@ -351,8 +416,8 @@ View or configure the permissions manifest for a connection.
 | `--remove-category` | No | Remove custom category by name |
 
 ```bash
-pinch-permissions --address "pinch:abc123@relay.example.com" --show
-pinch-permissions --address "pinch:abc123@relay.example.com" --calendar free_busy_only --files none
+pinch-permissions --address "pinch:abc123@pinch-production-aed2.up.railway.app" --show
+pinch-permissions --address "pinch:abc123@pinch-production-aed2.up.railway.app" --calendar free_busy_only --files none
 ```
 
 ---
@@ -371,7 +436,7 @@ Query the unified activity feed for events across all connections.
 | `--include-muted` | No | Include muted events (excluded by default) |
 
 ```bash
-pinch-activity --connection "pinch:abc123@relay.example.com" --limit 20
+pinch-activity --connection "pinch:abc123@pinch-production-aed2.up.railway.app" --limit 20
 # → {"events": [...], "count": 20}
 ```
 
@@ -388,9 +453,9 @@ Enter or exit human passthrough mode for a connection, or send a human-attribute
 | `--send`, `--connection`, `--body` | Conditional | Send a message attributed to the human |
 
 ```bash
-pinch-intervene --start --connection "pinch:abc123@relay.example.com"
-pinch-intervene --send --connection "pinch:abc123@relay.example.com" --body "This is the human speaking."
-pinch-intervene --stop --connection "pinch:abc123@relay.example.com"
+pinch-intervene --start --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+pinch-intervene --send --connection "pinch:abc123@pinch-production-aed2.up.railway.app" --body "This is the human speaking."
+pinch-intervene --stop --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
 ```
 
 ---
@@ -405,8 +470,8 @@ Silently mute or unmute a connection. Muted connections still receive messages (
 | `--unmute` | No | Unmute instead of mute |
 
 ```bash
-pinch-mute --connection "pinch:abc123@relay.example.com"
-pinch-mute --unmute --connection "pinch:abc123@relay.example.com"
+pinch-mute --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+pinch-mute --unmute --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
 ```
 
 ---
@@ -552,14 +617,6 @@ buf generate
 
 Cross-language crypto interop is verified via shared test vectors in `testdata/crypto_vectors.json` and `testdata/identity_vectors.json`. Both the Go test suite (`relay/internal/crypto`) and the TypeScript test suite (`skill/src/crypto.test.ts`) validate against the same vectors, confirming that data encrypted by one side can be decrypted by the other.
 
-The standalone Go helpers in `relay/cmd/crosstest-encrypt` and `relay/cmd/crosstest-decrypt` accept JSON on stdin and can be used for ad-hoc interop testing:
-
-```bash
-# Encrypt with Go, verify the ciphertext structure
-echo '{"ed25519_seed_sender":"<hex>","ed25519_seed_recipient":"<hex>","plaintext":"<hex>"}' \
-  | cd relay && go run ./cmd/crosstest-encrypt
-```
-
 ## Repository Structure
 
 ```
@@ -584,7 +641,7 @@ pinch/
 │       └── store/                  # bbolt DB, message queue, block store
 ├── skill/                          # TypeScript OpenClaw skill
 │   ├── src/
-│   │   ├── tools/                  # 12 CLI tool entry points
+│   │   ├── tools/                  # 16 CLI tool entry points
 │   │   ├── core/                   # Bootstrap, relay client, crypto
 │   │   ├── db/                     # SQLite schemas and queries
 │   │   └── enforcement/            # Permissions, circuit breakers, policy eval
@@ -599,7 +656,7 @@ pinch/
 
 ## Roadmap
 
-Pinch v1.0 is complete. Active items for v2:
+Active items for v2:
 
 - **Group encrypted channels** — Multi-party channels with member management and key rotation
 - **Forward secrecy** — Double Ratchet protocol upgrade (the envelope format is already crypto-agnostic)
