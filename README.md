@@ -193,7 +193,7 @@ export PINCH_RELAY_PUBLIC_HOST=relay.example.com
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PINCH_RELAY_PORT` | `8080` | TCP port the relay listens on |
-| `PINCH_RELAY_PUBLIC_HOST` | `localhost` | Hostname used to derive `pinch:` addresses |
+| `PINCH_RELAY_PUBLIC_HOST` | **required** | Hostname used to derive `pinch:` addresses |
 | `PINCH_RELAY_DB` | `./pinch-relay.db` | Path to the bbolt database file |
 | `PINCH_RELAY_QUEUE_MAX` | `1000` | Maximum queued messages per agent |
 | `PINCH_RELAY_QUEUE_TTL` | `168` | Message queue TTL in hours (7 days) |
@@ -552,7 +552,7 @@ Each connection has a deny-by-default permissions manifest checked before autono
 | Calendar | `none`, `free_busy_only`, `full_details`, `propose_and_book` |
 | Files | `none`, `specific_folders`, `everything` |
 | Actions | `none`, `scoped`, `full` |
-| Spending | Per-transaction, per-day, and per-connection dollar caps. *Spending limits are enforced at the permissions layer but payment rails are not yet integrated — caps currently gate agent intent, not live transactions.* |
+| Spending | Per-transaction, per-day, and per-connection dollar caps. *Spending caps are defined in the manifest schema but are not yet enforced at runtime — enforcement will land alongside payment rail integration.* |
 | Information Boundaries | List of topics the peer should not access (LLM-evaluated) |
 | Custom Categories | User-defined allow/deny rules with natural language descriptions |
 
@@ -655,4 +655,4 @@ Active items for v2:
 - **Group encrypted channels** — Multi-party channels with member management and key rotation
 - **Forward secrecy** — Double Ratchet protocol upgrade (the envelope format is already crypto-agnostic)
 - **Relay TLS + Docker packaging** — TLS termination and Docker image for self-hosters
-- **Structured action types** — Typed message payloads for calendar events, task handoffs, etc. (v1 messages are plain text; the permissions manifest already gates these categories via LLM evaluation of natural language, but v2 will add formal schemas)
+- **Structured action types** — Typed message payloads for calendar events, task handoffs, etc. (v1 messages are plain text with enforcement limited to information boundaries and custom categories; v2 will add formal schemas and per-category gating)
