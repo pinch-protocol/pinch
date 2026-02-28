@@ -46,6 +46,11 @@ export interface SendMessageParams {
  * decrypt, and delivery confirmation flows.
  */
 export class MessageManager {
+	private _flushRemaining = -1; // -1 = no QueueStatus received yet
+	private _flushResolve: (() => void) | null = null;
+	private _flushPromise: Promise<void> | null = null;
+	private _queueStatusReceived = false;
+
 	constructor(
 		private relayClient: RelayClient,
 		private connectionStore: ConnectionStore,
@@ -53,6 +58,47 @@ export class MessageManager {
 		private keypair: Keypair,
 		private enforcementPipeline: EnforcementPipeline,
 	) {}
+
+	/**
+	 * Returns a promise that resolves once all relay-queued messages
+	 * (reported via QueueStatus) have been received and stored.
+	 *
+	 * Waits briefly for a QueueStatus to arrive after auth. If none
+	 * arrives within the grace period, assumes no messages are queued.
+	 */
+	async waitForFlush(timeoutMs = 10_000): Promise<void> {
+		// Give the relay a moment to send QueueStatus after auth.
+		// The relay sends it immediately after registration in the hub,
+		// so a short grace period is sufficient.
+		if (!this._queueStatusReceived) {
+			await new Promise<void>((resolve) => {
+				const check = () => {
+					if (this._queueStatusReceived) { resolve(); return; }
+					elapsed += 50;
+					if (elapsed >= 2000) { resolve(); return; }
+					setTimeout(check, 50);
+				};
+				let elapsed = 0;
+				setTimeout(check, 50);
+			});
+		}
+
+		// No queued messages (or none reported).
+		if (this._flushRemaining <= 0) return;
+
+		if (this._flushPromise) return this._flushPromise;
+
+this._flushPromise = new Promise<void>((resolve, reject) => {
+	this._flushResolve = resolve;
+	setTimeout(() => {
+		this._flushResolve = null;
+		this._flushPromise = null;
+		this._flushRemaining = 0;
+		reject(new Error(`waitForFlush timed out after ${timeoutMs}ms`));
+	}, timeoutMs);
+});
+		return this._flushPromise;
+	}
 
 	/**
 	 * Initialize crypto subsystem. Must be called before any message operations.
@@ -251,6 +297,16 @@ export class MessageManager {
 
 		// 12. Send delivery confirmation
 		await this.sendDeliveryConfirmation(messageId, senderAddress);
+
+		// 13. Track flush progress
+		if (this._flushRemaining > 0) {
+			this._flushRemaining--;
+			if (this._flushRemaining <= 0 && this._flushResolve) {
+				this._flushResolve();
+				this._flushResolve = null;
+				this._flushPromise = null;
+			}
+		}
 	}
 
 	/**
@@ -380,6 +436,8 @@ export class MessageManager {
 	private handleQueueStatus(envelope: Envelope): void {
 		if (envelope.payload.case !== "queueStatus") return;
 		const pendingCount = envelope.payload.value.pendingCount;
+		this._flushRemaining = pendingCount;
+		this._queueStatusReceived = true;
 		console.log(`Relay reports ${pendingCount} queued messages pending flush`);
 	}
 

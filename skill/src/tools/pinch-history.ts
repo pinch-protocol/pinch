@@ -53,7 +53,10 @@ export function parseArgs(args: string[]): {
 /** Execute the pinch_history tool. */
 export async function run(args: string[]): Promise<void> {
 	const parsed = parseArgs(args);
-	const { messageStore } = await bootstrap();
+	const { messageStore, messageManager } = await bootstrap();
+
+	// Wait for any relay-queued messages to arrive before querying.
+	await messageManager.waitForFlush();
 
 	const messages = messageStore.getHistory({
 		connectionAddress: parsed.connection,

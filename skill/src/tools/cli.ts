@@ -194,7 +194,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
  */
 export async function shutdown(): Promise<void> {
 	if (!bootstrapped) return;
-	bootstrapped.relayClient.disconnect();
+	await bootstrapped.relayClient.disconnectAsync();
 	bootstrapped.messageStore.close();
 	bootstrapped = null;
 }

@@ -225,6 +225,33 @@ export class RelayClient {
 	}
 
 	/**
+	 * Disconnect and wait for the WebSocket to fully close.
+	 * Use this when you need to ensure no more messages will arrive
+	 * before closing dependent resources (e.g. the database).
+	 */
+	disconnectAsync(): Promise<void> {
+		this.autoReconnect = false;
+		if (!this.ws) return Promise.resolve();
+
+		return new Promise<void>((resolve) => {
+			const ws = this.ws!;
+			const timeout = setTimeout(() => {
+				ws.terminate();
+				this.cleanup();
+				resolve();
+			}, 3000);
+
+			ws.once("close", () => {
+				clearTimeout(timeout);
+				this.cleanup();
+				resolve();
+			});
+
+			ws.close(1000, "client disconnect");
+		});
+	}
+
+	/**
 	 * Register a handler called when the connection is permanently lost
 	 * (all reconnection attempts exhausted).
 	 */
