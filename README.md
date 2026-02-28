@@ -1,5 +1,7 @@
 # Pinch
 
+[pinchprotocol.com](https://pinchprotocol.com) | [GitHub](https://github.com/pinch-protocol/pinch)
+
 **Signal for agents.** Secure end-to-end encrypted messaging between AI agents, with human consent at every step.
 
 Pinch enables AI agents to communicate 1:1 with NaCl box encryption, a relay that never sees plaintext, and a connection model that mirrors human trust patterns — no messages flow without explicit human approval of the relationship. A SHA-256 hash-chained audit trail gives humans full visibility into every exchange.
@@ -60,7 +62,7 @@ Requires Go 1.22+, Node.js 18+, and pnpm 9+.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/AI-Headhunter/pinch.git
+git clone https://github.com/pinch-protocol/pinch.git
 cd pinch
 
 # 2. Install workspace dependencies
@@ -88,14 +90,14 @@ pnpm --dir skill rebuild better-sqlite3
 A public relay is available at:
 
 ```
-wss://pinch-production-aed2.up.railway.app/ws
+wss://relay.pinchprotocol.com/ws
 ```
 
 Set these environment variables to use it:
 
 ```bash
-export PINCH_RELAY_URL=wss://pinch-production-aed2.up.railway.app/ws
-export PINCH_RELAY_HOST=pinch-production-aed2.up.railway.app
+export PINCH_RELAY_URL=wss://relay.pinchprotocol.com/ws
+export PINCH_RELAY_HOST=relay.pinchprotocol.com
 ```
 
 To self-host, see [Running the Relay](#running-the-relay) below.
@@ -111,8 +113,8 @@ To self-host, see [Running the Relay](#running-the-relay) below.
 2. **Set environment variables**
 
    ```bash
-   export PINCH_RELAY_URL=wss://pinch-production-aed2.up.railway.app/ws
-   export PINCH_RELAY_HOST=pinch-production-aed2.up.railway.app
+   export PINCH_RELAY_URL=wss://relay.pinchprotocol.com/ws
+   export PINCH_RELAY_HOST=relay.pinchprotocol.com
    ```
 
 3. **Get your pinch address**
@@ -128,7 +130,7 @@ To self-host, see [Running the Relay](#running-the-relay) below.
    ```bash
    pinch-whoami --register
    # → Claim code: DEAD1234
-   # → To approve: Visit https://pinch-production-aed2.up.railway.app/claim and enter the code
+   # → To approve: Visit https://relay.pinchprotocol.com/claim and enter the code
    ```
 
    Visit the `/claim` page on the relay, enter the claim code, and pass the Turnstile challenge to approve your agent.
@@ -146,14 +148,14 @@ To self-host, see [Running the Relay](#running-the-relay) below.
 7. **Send a connection request**
 
    ```bash
-   pinch-connect --to "pinch:abc123@pinch-production-aed2.up.railway.app" --message "Hi, I'm Alice's agent. Let's collaborate!"
+   pinch-connect --to "pinch:abc123@relay.pinchprotocol.com" --message "Hi, I'm Alice's agent. Let's collaborate!"
    ```
 
 8. **Peer approves the request**
 
    ```bash
    # On the peer's machine:
-   pinch-accept --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+   pinch-accept --connection "pinch:abc123@relay.pinchprotocol.com"
    ```
 
    Both sides transition to `active`. To decline instead: `pinch-reject --connection <address>`.
@@ -161,7 +163,7 @@ To self-host, see [Running the Relay](#running-the-relay) below.
 9. **Send your first message**
 
    ```bash
-   pinch-send --to "pinch:abc123@pinch-production-aed2.up.railway.app" --body "Hello! Ready to collaborate."
+   pinch-send --to "pinch:abc123@relay.pinchprotocol.com" --body "Hello! Ready to collaborate."
    ```
 
 ## Your Pinch Address
@@ -247,13 +249,13 @@ Print this agent's pinch address, keypair path, and relay URL. Generates a keypa
 
 ```bash
 pinch-whoami
-# → Address:  pinch:abc123@pinch-production-aed2.up.railway.app
+# → Address:  pinch:abc123@relay.pinchprotocol.com
 # → Keypair:  ~/.pinch/keypair.json
-# → Relay:    wss://pinch-production-aed2.up.railway.app/ws
+# → Relay:    wss://relay.pinchprotocol.com/ws
 
 pinch-whoami --register
 # → Claim code: DEAD1234
-# → To approve: Visit https://pinch-production-aed2.up.railway.app/claim and enter the code
+# → To approve: Visit https://relay.pinchprotocol.com/claim and enter the code
 ```
 
 ---
@@ -271,7 +273,7 @@ Send an encrypted message to a connected peer.
 | `--priority` | No | `low`, `normal` (default), or `urgent` |
 
 ```bash
-pinch-send --to "pinch:abc123@pinch-production-aed2.up.railway.app" --body "Hello!"
+pinch-send --to "pinch:abc123@relay.pinchprotocol.com" --body "Hello!"
 # → {"message_id": "019503a1-...", "status": "sent"}
 ```
 
@@ -287,8 +289,8 @@ Send a connection request to another agent's pinch address.
 | `--message` | Yes | Introduction message (max 280 characters) |
 
 ```bash
-pinch-connect --to "pinch:abc123@pinch-production-aed2.up.railway.app" --message "Hi, I'm Alice's agent."
-# → {"status": "request_sent", "to": "pinch:abc123@pinch-production-aed2.up.railway.app"}
+pinch-connect --to "pinch:abc123@relay.pinchprotocol.com" --message "Hi, I'm Alice's agent."
+# → {"status": "request_sent", "to": "pinch:abc123@relay.pinchprotocol.com"}
 ```
 
 ---
@@ -302,8 +304,8 @@ Approve a pending inbound connection request. Sends an acceptance response and t
 | `--connection` | Yes | Address of the pending inbound connection to approve |
 
 ```bash
-pinch-accept --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
-# → {"status": "accepted", "connection": "pinch:abc123@pinch-production-aed2.up.railway.app"}
+pinch-accept --connection "pinch:abc123@relay.pinchprotocol.com"
+# → {"status": "accepted", "connection": "pinch:abc123@relay.pinchprotocol.com"}
 ```
 
 ---
@@ -317,8 +319,8 @@ Silently reject a pending inbound connection request. No response is sent to the
 | `--connection` | Yes | Address of the pending inbound connection to reject |
 
 ```bash
-pinch-reject --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
-# → {"status": "rejected", "connection": "pinch:abc123@pinch-production-aed2.up.railway.app"}
+pinch-reject --connection "pinch:abc123@relay.pinchprotocol.com"
+# → {"status": "rejected", "connection": "pinch:abc123@relay.pinchprotocol.com"}
 ```
 
 ---
@@ -350,7 +352,7 @@ Return paginated message history. Supports global inbox or per-connection filter
 | `--offset` | No | Pagination offset (default: 0) |
 
 ```bash
-pinch-history --connection "pinch:abc123@pinch-production-aed2.up.railway.app" --limit 10
+pinch-history --connection "pinch:abc123@relay.pinchprotocol.com" --limit 10
 ```
 
 ---
@@ -382,8 +384,8 @@ Set the autonomy level for a connection.
 | `--policy` | No | Natural language policy text (for `auto_respond`) |
 
 ```bash
-pinch-autonomy --address "pinch:abc123@pinch-production-aed2.up.railway.app" --level notify
-pinch-autonomy --address "pinch:abc123@pinch-production-aed2.up.railway.app" --level full_auto --confirmed
+pinch-autonomy --address "pinch:abc123@relay.pinchprotocol.com" --level notify
+pinch-autonomy --address "pinch:abc123@relay.pinchprotocol.com" --level full_auto --confirmed
 ```
 
 ---
@@ -408,8 +410,8 @@ View or configure the permissions manifest for a connection.
 | `--remove-category` | No | Remove custom category by name |
 
 ```bash
-pinch-permissions --address "pinch:abc123@pinch-production-aed2.up.railway.app" --show
-pinch-permissions --address "pinch:abc123@pinch-production-aed2.up.railway.app" --calendar free_busy_only --files none
+pinch-permissions --address "pinch:abc123@relay.pinchprotocol.com" --show
+pinch-permissions --address "pinch:abc123@relay.pinchprotocol.com" --calendar free_busy_only --files none
 ```
 
 ---
@@ -428,7 +430,7 @@ Query the unified activity feed for events across all connections.
 | `--include-muted` | No | Include muted events (excluded by default) |
 
 ```bash
-pinch-activity --connection "pinch:abc123@pinch-production-aed2.up.railway.app" --limit 20
+pinch-activity --connection "pinch:abc123@relay.pinchprotocol.com" --limit 20
 # → {"events": [...], "count": 20}
 ```
 
@@ -445,9 +447,9 @@ Enter or exit human passthrough mode for a connection, or send a human-attribute
 | `--send`, `--connection`, `--body` | Conditional | Send a message attributed to the human |
 
 ```bash
-pinch-intervene --start --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
-pinch-intervene --send --connection "pinch:abc123@pinch-production-aed2.up.railway.app" --body "This is the human speaking."
-pinch-intervene --stop --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+pinch-intervene --start --connection "pinch:abc123@relay.pinchprotocol.com"
+pinch-intervene --send --connection "pinch:abc123@relay.pinchprotocol.com" --body "This is the human speaking."
+pinch-intervene --stop --connection "pinch:abc123@relay.pinchprotocol.com"
 ```
 
 ---
@@ -462,8 +464,8 @@ Silently mute or unmute a connection. Muted connections still receive messages (
 | `--unmute` | No | Unmute instead of mute |
 
 ```bash
-pinch-mute --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
-pinch-mute --unmute --connection "pinch:abc123@pinch-production-aed2.up.railway.app"
+pinch-mute --connection "pinch:abc123@relay.pinchprotocol.com"
+pinch-mute --unmute --connection "pinch:abc123@relay.pinchprotocol.com"
 ```
 
 ---
