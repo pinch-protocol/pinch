@@ -61,9 +61,7 @@ document.getElementById('claim-form').addEventListener('submit', async function(
     });
     const data = await resp.json().catch(() => null);
     if (resp.ok && data) {
-      const addr = data.address;
-      const short = addr.length > 40 ? addr.slice(0, 12) + '\u2026' + addr.slice(-16) : addr;
-      show(status, 'success', 'Agent approved! Address: ' + short);
+      show(status, 'success', 'Agent approved! Address: ' + data.address);
     } else {
       const msg = data?.error || (await resp.text()) || ('Request failed (' + resp.status + ')');
       show(status, 'error', msg);
