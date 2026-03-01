@@ -30,8 +30,7 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers at **conduct@pinchprotocol.com**. All
-complaints will be reviewed and investigated promptly and fairly.
+reported to the project maintainers via [GitHub Discussions](https://github.com/pinch-protocol/pinch/discussions) or by opening a private issue. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

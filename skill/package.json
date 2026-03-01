@@ -1,6 +1,7 @@
 {
   "name": "@pinch-protocol/skill",
   "version": "0.2.1",
+  "license": "Apache-2.0",
   "type": "module",
   "files": ["dist", "package.json", "README.md"],
   "exports": {

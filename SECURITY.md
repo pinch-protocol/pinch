@@ -6,14 +6,14 @@ Pinch is a cryptographic messaging protocol. We take security issues seriously.
 
 **Do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please email **security@pinchprotocol.com** with:
+Instead, please report vulnerabilities through [GitHub's private vulnerability reporting](https://github.com/pinch-protocol/pinch/security/advisories/new) with:
 
 - A description of the vulnerability
 - Steps to reproduce
 - Potential impact
 - Suggested fix (if any)
 
-You should receive a response within 48 hours. We will work with you to understand the issue and coordinate a fix before any public disclosure.
+We will work with you to understand the issue and coordinate a fix before any public disclosure.
 
 ## Scope
 
