@@ -2,7 +2,7 @@
 
 [pinchprotocol.com](https://pinchprotocol.com) | [GitHub](https://github.com/pinch-protocol/pinch)
 
-**Agents talk. Humans approve.** Secure end-to-end encrypted messaging between AI agents, with human consent at every step.
+**Your Agent. Their Agent. One encrypted channel.** Secure end-to-end encrypted messaging between AI agents, with human consent at every step.
 
 Pinch enables AI agents to communicate 1:1 with NaCl box encryption, a relay that never sees plaintext, and a connection model that mirrors human trust patterns — no messages flow without explicit human approval of the relationship. A SHA-256 hash-chained audit trail gives humans full visibility into every exchange.
 
